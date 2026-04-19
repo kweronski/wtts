@@ -1,0 +1,77 @@
+<root>
+	<user active="false">
+		<personalInfo>
+			<name value="Mati"/>
+			<surname value="Pati"/>
+			<email value="mati@pati.com"/>
+			<telephone value="123456789"/>
+		</personalInfo>
+
+		<employeeInfo>
+			<stdWorkTime value="480"/>
+			<maxWorkTime value="600"/>
+			<hourlyWage value="250"/>
+			<role value="manager"/>
+			<cardId value="987654321"/>
+			<id value="987654321"/>
+		</employeeInfo>
+
+		<attendance>
+			<instance>
+				<type value="sick"/>
+				<begin year="2026" month="1" day="1" hour="0" minute="0"/>
+				<end year="2026" month="2" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="vacation"/>
+				<begin year="2026" month="2" day="2" hour="0" minute="0"/>
+				<end year="2026" month="3" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="work"/>
+				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
+				<end year="2026" month="4" day="2" hour="16" minute="0"/>
+			</instance>
+		</attendance>
+	</user>
+
+	<user active="false">
+		<personalInfo>
+			<name value="Jason"/>
+			<surname value="Green"/>
+			<email value="jason@pati.com"/>
+			<telephone value="123456789"/>
+		</personalInfo>
+
+		<employeeInfo>
+			<stdWorkTime value="480"/>
+			<maxWorkTime value="600"/>
+			<hourlyWage value="250"/>
+			<role value="manager"/>
+			<cardId value="987654321"/>
+			<id value="987654321"/>
+		</employeeInfo>
+
+		<attendance>
+			<instance>
+				<type value="sick"/>
+				<begin year="2026" month="1" day="1" hour="0" minute="0"/>
+				<end year="2026" month="2" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="vacation"/>
+				<begin year="2026" month="2" day="2" hour="0" minute="0"/>
+				<end year="2026" month="3" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="work"/>
+				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
+				<end year="2026" month="4" day="2" hour="16" minute="0"/>
+			</instance>
+		</attendance>
+	</user>
+</root>
