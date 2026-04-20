@@ -1,14 +1,24 @@
-#include <wtts/dataParser.hpp>
 #include <iostream>
+#include <wtts/xmlParser.hpp>
 
-int main() {
-	dp::DataParser* p = new dp::XMLDataParser{};
-	p->loadData("/mnt/c/Users/User/Desktop/dataStorage.xml");
-	auto ids = p->getUserIdentifiers();
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    std::cerr << "Too few arguments; Provide path to data storage" << std::endl;
+    return 1;
+  }
 
-	for (auto const& id : ids) {
-		std::cout << p->getUserName(id) << " " << p->getUserSurname(id) << std::endl;
-	}
+  dp::DataParser *p = new dp::XMLDataParser{};
+  if (auto result = p->loadData(argv[1]); result != dp::Result::Success) {
+    std::cerr << "Failed to open data storage" << std::endl;
+    return 2;
+  }
 
-	delete p;
+  auto ids = p->getEmployeeIdentifiers();
+
+  for (auto const &id : ids) {
+    std::cout << p->getEmployeeName(id) << " " << p->getEmployeeSurname(id)
+              << std::endl;
+  }
+
+  delete p;
 }

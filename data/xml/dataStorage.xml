@@ -1,5 +1,5 @@
 <root>
-	<user active="false">
+	<employee active="true">
 		<personalInfo>
 			<name value="Mati"/>
 			<surname value="Pati"/>
@@ -35,9 +35,9 @@
 				<end year="2026" month="4" day="2" hour="16" minute="0"/>
 			</instance>
 		</attendance>
-	</user>
+	</employee>
 
-	<user active="false">
+	<employee active="false">
 		<personalInfo>
 			<name value="Jason"/>
 			<surname value="Green"/>
@@ -51,7 +51,7 @@
 			<hourlyWage value="250"/>
 			<role value="manager"/>
 			<cardId value="987654321"/>
-			<id value="987654321"/>
+			<id value="987654322"/>
 		</employeeInfo>
 
 		<attendance>
@@ -73,5 +73,5 @@
 				<end year="2026" month="4" day="2" hour="16" minute="0"/>
 			</instance>
 		</attendance>
-	</user>
+	</employee>
 </root>

@@ -4,28 +4,40 @@
 #include <chrono>
 #include <list>
 
-// PHASE 0 - LOAD DATA FROM DISK
-enum class UserType {
-    unknown, manager, driver, cleaner, chef, waiter, admin
+namespace dp {
+enum class EmployeeStatus { Active, Inactive };
+
+enum class EmployeeRole {
+  Unknown,
+  Manager,
+  Driver,
+  Cleaner,
+  Chef,
+  Waiter,
+  Admin
 };
+
+enum class TimePeriodType { Vacation, Work, Delivery, UnpaidLeave };
 
 struct TimePeriod {
-    std::chrono::time_point<std::chrono::system_clock> start, end;
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+  TimePeriodType type;
 };
 
-struct User {
-    std::string name, surname, telephone;
-    UserType role;
-    std::chrono::seconds standardWorkTime, maxWorkTime;
-
-		std::list<TimePeriod> attendance;
-};
-
-struct AbsenceLog {
-
+template <typename T> struct Employee {
+  EmployeeStatus status;
+  std::string name, surname, telephone, email;
+  EmployeeRole role;
+  std::string cardId;
+  T id;
+  std::chrono::minutes standardWorkTime, maxWorkTime;
+  unsigned hourlyWage{};
+  std::list<TimePeriod> attendance;
 };
 
 struct DataStorage {
-    std::list<User> users;
-
+  using ID = std::string;
+  std::unordered_map<ID, Employee<ID> *> employeeMap;
+  std::list<Employee<ID>> employees;
 };
+} // namespace dp
