@@ -264,4 +264,4 @@ std::string makeAttendanceInstStr(TimePeriod const *p) {
          ", " + std::to_string(p->end.hour) + ":" +
          std::to_string(p->end.minute) + ")";
 }
-}
+} // namespace dp
