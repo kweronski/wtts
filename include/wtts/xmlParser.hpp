@@ -13,6 +13,7 @@ public:
   XMLDataParser();
   Result loadData(std::string const &filePath) override;
   std::vector<ID> getEmployeeIdentifiers() override;
+  std::vector<TimePeriod *> getEmployeeAttendance(ID const &id) override;
 
   // Personal info
   bool getEmployeeActiveStatus(ID const &id) override;

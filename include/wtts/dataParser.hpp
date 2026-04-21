@@ -19,14 +19,31 @@ enum class Result {
   MissingEmployeeRoleError,
   MissingEmployeeCardIdError,
   MissingEmployeeIdError,
-  UnknownEmployeeRoleError
+  UnknownEmployeeRoleError,
+  MissingAttendanceBeginYearError,
+  MissingAttendanceBeginMonthError,
+  MissingAttendanceBeginDayError,
+  MissingAttendanceBeginHourError,
+  MissingAttendanceBeginMinuteError,
+  MissingAttendanceEndYearError,
+  MissingAttendanceEndMonthError,
+  MissingAttendanceEndDayError,
+  MissingAttendanceEndHourError,
+  MissingAttendanceEndMinuteError,
+  MissingAttendanceTypeError,
+  UnknownAttendanceTypeError,
 };
+
+struct TimePeriod;
+std::string makeAttendanceInstStr(TimePeriod const *);
 
 class DataParser {
 	public:
 		virtual Result loadData(std::string const& url) = 0;
 		using ID = std::string;
                 virtual std::vector<ID> getEmployeeIdentifiers() = 0;
+                virtual std::vector<TimePeriod *>
+                getEmployeeAttendance(ID const &id) = 0;
 
                 // Personal info
                 virtual bool getEmployeeActiveStatus(ID const &id) = 0;

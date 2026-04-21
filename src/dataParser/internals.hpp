@@ -1,8 +1,7 @@
 #pragma once
 
-#include <string>
-#include <chrono>
 #include <list>
+#include <string>
 
 namespace dp {
 enum class EmployeeStatus { Active, Inactive };
@@ -17,15 +16,15 @@ enum class EmployeeRole {
   Admin
 };
 
-enum class TimePeriodType { Vacation, Work, Delivery, UnpaidLeave };
+enum class AttendanceType { Vacation, Work, Delivery, Sick };
 
 struct TimePoint {
   unsigned year, month, day, hour, minute;
 };
 
 struct TimePeriod {
-  TimePoint start, end;
-  TimePeriodType type;
+  TimePoint begin, end;
+  AttendanceType type;
 };
 
 template <typename T> struct Employee {

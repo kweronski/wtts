@@ -8,23 +8,38 @@ XMLDataParser::XMLDataParser()
     : document_{new pugi::xml_document{}, [](auto p) { delete p; }},
       storage_{new DataStorage{}, [](auto p) { delete p; }} {}
 
-#ifdef MCR_ATTR
-#error "MCR_ATTR is already defined"
+#ifdef MCR_XML_NODE
+#error "MCR_XML_NODE is already defined"
 #endif
 
 #ifdef MCR_ATTR_VAL
 #error "MCR_ATTR_VAL is already defined"
 #endif
 
-#ifdef MCR_XML_NODE
-#error "MCR_XML_NODE is already defined"
+#ifdef MCR_ATTR
+#error "MCR_ATTR is already defined"
 #endif
 
 #ifdef MCR_ATTR_NUM
 #error "MCR_ATTR_NUM is already defined"
 #endif
 
+#ifdef MCR_NUM
+#error "MCR_NUM is already defined"
+#endif
+
+#ifdef MCR_TIME
+#error "MCR_TIME is already defined"
+#endif
+
 // These macros are only visible for the duration of the loadData function.
+#define MCR_XML_NODE(node, childId, parent, err)                               \
+  if (!parent)                                                                 \
+    return err;                                                                \
+  auto node = parent.child(#childId);                                          \
+  if (!node)                                                                   \
+    return err;
+
 #define MCR_ATTR_VAL(dst, childId, parent, err)                                \
   if (parent) {                                                                \
     if (!parent.child(#childId))                                               \
@@ -35,13 +50,6 @@ XMLDataParser::XMLDataParser()
     else                                                                       \
       dst = parent.child(#childId).attribute("value").value();                 \
   } else                                                                       \
-    return err;
-
-#define MCR_XML_NODE(node, childId, parent, err)                               \
-  if (!parent)                                                                 \
-    return err;                                                                \
-  auto node = parent.child(#childId);                                          \
-  if (!node)                                                                   \
     return err;
 
 #define MCR_ATTR(dst, attrId, node, err)                                       \
@@ -60,8 +68,59 @@ XMLDataParser::XMLDataParser()
     }                                                                          \
   }
 
+#define MCR_NUM(dst, attrId, node, err, conversionFunc)                        \
+  {                                                                            \
+    std::string tmp;                                                           \
+    MCR_ATTR(tmp, attrId, node, err);                                          \
+    try {                                                                      \
+      dst = conversionFunc(tmp);                                               \
+    } catch (...) {                                                            \
+      return Result::StringToNumberConversionError;                            \
+    }                                                                          \
+  }
+
+#define MCR_TIME(time, node)                                                   \
+  {                                                                            \
+    std::string attType;                                                       \
+    MCR_ATTR_VAL(attType, type, node, Result::MissingAttendanceTypeError);     \
+    if (attType == "vacation")                                                 \
+      time.type = AttendanceType::Vacation;                                    \
+    else if (attType == "delivery")                                            \
+      time.type = AttendanceType::Delivery;                                    \
+    else if (attType == "work")                                                \
+      time.type = AttendanceType::Work;                                        \
+    else if (attType == "sick")                                                \
+      time.type = AttendanceType::Sick;                                        \
+    else                                                                       \
+      return Result::UnknownAttendanceTypeError;                               \
+                                                                               \
+    MCR_NUM(time.begin.year, year, node.child("begin"),                        \
+            Result::MissingAttendanceBeginYearError, std::stoul);              \
+    MCR_NUM(time.begin.month, month, node.child("begin"),                      \
+            Result::MissingAttendanceBeginMonthError, std::stoul);             \
+    MCR_NUM(time.begin.day, day, node.child("begin"),                          \
+            Result::MissingAttendanceBeginDayError, std::stoul);               \
+    MCR_NUM(time.begin.hour, hour, node.child("begin"),                        \
+            Result::MissingAttendanceBeginHourError, std::stoul);              \
+    MCR_NUM(time.begin.minute, minute, node.child("begin"),                    \
+            Result::MissingAttendanceBeginMinuteError, std::stoul);            \
+                                                                               \
+    MCR_NUM(time.end.year, year, node.child("end"),                            \
+            Result::MissingAttendanceBeginYearError, std::stoul);              \
+    MCR_NUM(time.end.month, month, node.child("end"),                          \
+            Result::MissingAttendanceBeginMonthError, std::stoul);             \
+    MCR_NUM(time.end.day, day, node.child("end"),                              \
+            Result::MissingAttendanceBeginDayError, std::stoul);               \
+    MCR_NUM(time.end.hour, hour, node.child("end"),                            \
+            Result::MissingAttendanceBeginHourError, std::stoul);              \
+    MCR_NUM(time.end.minute, minute, node.child("end"),                        \
+            Result::MissingAttendanceBeginMinuteError, std::stoul);            \
+  }
+
 Result XMLDataParser::loadData(std::string const &url) {
-  document_->load_file(url.c_str());
+  if (!document_->load_file(url.c_str()))
+    return Result::CouldNotOpenFileError;
+
   auto root = document_->first_child();
 
   if (!root) // The data file is empty. Return early.
@@ -124,7 +183,9 @@ Result XMLDataParser::loadData(std::string const &url) {
     if (auto attendance = node.child("attendance"); attendance) {
       for (auto instance = attendance.child("instance"); instance;
            instance = instance.next_sibling()) {
-        auto type = instance.child("type");
+        TimePeriod time{};
+        MCR_TIME(time, instance);
+        data.attendance.push_back(std::move(time));
       }
     }
 
@@ -136,10 +197,12 @@ Result XMLDataParser::loadData(std::string const &url) {
   return Result::Success;
 }
 
-#undef MCR_ATTR_NUM
 #undef MCR_XML_NODE
 #undef MCR_ATTR_VAL
 #undef MCR_ATTR
+#undef MCR_ATTR_NUM
+#undef MCR_NUM
+#undef MCR_TIME
 
 std::vector<XMLDataParser::ID> XMLDataParser::getEmployeeIdentifiers() {
   std::vector<XMLDataParser::ID> ids;
@@ -166,9 +229,39 @@ std::string XMLDataParser::getEmployeeEmail(ID const &id) {
 }
 
 // Employee info
-unsigned XMLDataParser::getEmployeeStandardWorkTime(ID const &id) { return 0; }
-unsigned XMLDataParser::getEmployeeMaxWorkTime(ID const &id) { return 0; }
-unsigned XMLDataParser::getEmployeeHourlyWage(ID const &id) { return 0; }
-unsigned XMLDataParser::getEmployeeRole(ID const &id) { return 0; }
-std::string XMLDataParser::getEmployeeCardId(ID const &id) { return ""; }
+unsigned XMLDataParser::getEmployeeStandardWorkTime(ID const &id) {
+  return storage_->employeeMap.at(id)->standardWorkTime;
+}
+unsigned XMLDataParser::getEmployeeMaxWorkTime(ID const &id) {
+  return storage_->employeeMap.at(id)->maxWorkTime;
+}
+unsigned XMLDataParser::getEmployeeHourlyWage(ID const &id) {
+  return storage_->employeeMap.at(id)->hourlyWage;
+}
+unsigned XMLDataParser::getEmployeeRole(ID const &id) {
+  return unsigned(storage_->employeeMap.at(id)->role);
+}
+std::string XMLDataParser::getEmployeeCardId(ID const &id) {
+  return storage_->employeeMap.at(id)->cardId;
+}
+
+// Attendance info
+std::vector<TimePeriod *> XMLDataParser::getEmployeeAttendance(ID const &id) {
+  std::vector<TimePeriod *> attendance;
+  attendance.reserve(storage_->employeeMap.at(id)->attendance.size());
+  for (auto &a : storage_->employeeMap.at(id)->attendance)
+    attendance.push_back(&a);
+  return attendance;
+}
+
+std::string makeAttendanceInstStr(TimePeriod const *p) {
+  return std::to_string(unsigned(p->type)) + " (" +
+         std::to_string(p->begin.year) + "/" + std::to_string(p->begin.month) +
+         "/" + std::to_string(p->begin.day) + ", " +
+         std::to_string(p->begin.hour) + ":" + std::to_string(p->begin.minute) +
+         ") - " + "(" + std::to_string(p->end.year) + "/" +
+         std::to_string(p->end.month) + "/" + std::to_string(p->end.day) +
+         ", " + std::to_string(p->end.hour) + ":" +
+         std::to_string(p->end.minute) + ")";
+}
 }
