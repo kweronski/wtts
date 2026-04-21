@@ -19,8 +19,12 @@ enum class EmployeeRole {
 
 enum class TimePeriodType { Vacation, Work, Delivery, UnpaidLeave };
 
+struct TimePoint {
+  unsigned year, month, day, hour, minute;
+};
+
 struct TimePeriod {
-  std::chrono::time_point<std::chrono::system_clock> start, end;
+  TimePoint start, end;
   TimePeriodType type;
 };
 
@@ -30,7 +34,7 @@ template <typename T> struct Employee {
   EmployeeRole role;
   std::string cardId;
   T id;
-  std::chrono::minutes standardWorkTime, maxWorkTime;
+  unsigned standardWorkTime, maxWorkTime;
   unsigned hourlyWage{};
   std::list<TimePeriod> attendance;
 };

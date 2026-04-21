@@ -18,6 +18,7 @@ int main(int argc, char **argv) {
   for (auto const &id : ids) {
     std::cout << p->getEmployeeName(id) << " " << p->getEmployeeSurname(id)
               << std::endl;
+    std::cout << "\t" << p->getEmployeeEmail(id) << std::endl;
   }
 
   delete p;

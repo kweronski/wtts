@@ -5,6 +5,7 @@ namespace dp {
 enum class Result {
   Success,
   CouldNotOpenFileError,
+  StringToNumberConversionError,
   MissingPersonalInfoError,
   MissingEmployeeInfoError,
   MissingEmployeeActiveStatusError,
@@ -42,6 +43,6 @@ class DataParser {
                 virtual std::string getEmployeeCardId(ID const &id) = 0;
 
                 // Attendance info
-		virtual ~DataParser() = default;
+                virtual ~DataParser() = default;
 };
 }

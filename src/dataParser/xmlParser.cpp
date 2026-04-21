@@ -8,6 +8,58 @@ XMLDataParser::XMLDataParser()
     : document_{new pugi::xml_document{}, [](auto p) { delete p; }},
       storage_{new DataStorage{}, [](auto p) { delete p; }} {}
 
+#ifdef MCR_ATTR
+#error "MCR_ATTR is already defined"
+#endif
+
+#ifdef MCR_ATTR_VAL
+#error "MCR_ATTR_VAL is already defined"
+#endif
+
+#ifdef MCR_XML_NODE
+#error "MCR_XML_NODE is already defined"
+#endif
+
+#ifdef MCR_ATTR_NUM
+#error "MCR_ATTR_NUM is already defined"
+#endif
+
+// These macros are only visible for the duration of the loadData function.
+#define MCR_ATTR_VAL(dst, childId, parent, err)                                \
+  if (parent) {                                                                \
+    if (!parent.child(#childId))                                               \
+      return err;                                                              \
+    else if (!parent.child(#childId).attribute("value") ||                     \
+             !parent.child(#childId).attribute("value").value())               \
+      return err;                                                              \
+    else                                                                       \
+      dst = parent.child(#childId).attribute("value").value();                 \
+  } else                                                                       \
+    return err;
+
+#define MCR_XML_NODE(node, childId, parent, err)                               \
+  if (!parent)                                                                 \
+    return err;                                                                \
+  auto node = parent.child(#childId);                                          \
+  if (!node)                                                                   \
+    return err;
+
+#define MCR_ATTR(dst, attrId, node, err)                                       \
+  if (!node || !node.attribute(#attrId) || !node.attribute(#attrId).value())   \
+    return err;                                                                \
+  dst = node.attribute(#attrId).value();
+
+#define MCR_ATTR_NUM(dst, childId, parent, err, conversionFunc)                \
+  {                                                                            \
+    std::string tmp;                                                           \
+    MCR_ATTR_VAL(tmp, childId, parent, err);                                   \
+    try {                                                                      \
+      dst = conversionFunc(tmp);                                               \
+    } catch (...) {                                                            \
+      return Result::StringToNumberConversionError;                            \
+    }                                                                          \
+  }
+
 Result XMLDataParser::loadData(std::string const &url) {
   document_->load_file(url.c_str());
   auto root = document_->first_child();
@@ -18,67 +70,39 @@ Result XMLDataParser::loadData(std::string const &url) {
   for (auto node = root.child("employee"); node; node = node.next_sibling()) {
     Employee<DataParser::ID> data{};
 
-    std::string active;
-    if (auto activeVal = node.attribute("active").value(); !activeVal)
-      return Result::MissingEmployeeActiveStatusError;
-    else
-      active = activeVal;
-
-    if (active == "true")
+    std::string emplStatus;
+    MCR_ATTR(emplStatus, active, node,
+             Result::MissingEmployeeActiveStatusError);
+    if (emplStatus == "true")
       data.status = EmployeeStatus::Active;
     else
       data.status = EmployeeStatus::Inactive;
 
-    auto personal = node.child("personalInfo");
-    if (!personal)
-      return Result::MissingPersonalInfoError;
+    MCR_XML_NODE(personal, personalInfo, node,
+                 Result::MissingPersonalInfoError);
 
-    auto name = personal.child("name");
-    if (!name)
-      return Result::MissingEmployeeNameError;
-    data.name = name.attribute("value").value();
+    MCR_ATTR_VAL(data.name, name, personal, Result::MissingEmployeeNameError);
+    MCR_ATTR_VAL(data.surname, surname, personal,
+                 Result::MissingEmployeeSurnameError);
+    MCR_ATTR_VAL(data.email, email, personal,
+                 Result::MissingEmployeeEmailError);
+    MCR_ATTR_VAL(data.telephone, telephone, personal,
+                 Result::MissingEmployeeTelephoneError);
 
-    auto surname = personal.child("surname");
-    if (!surname)
-      return Result::MissingEmployeeSurnameError;
-    data.surname = surname.attribute("value").value();
+    MCR_XML_NODE(workRelated, employeeInfo, node,
+                 Result::MissingEmployeeInfoError);
 
-    auto email = personal.child("email");
-    if (!email)
-      return Result::MissingEmployeeEmailError;
-    data.email = email.attribute("value").value();
+    MCR_ATTR_NUM(data.standardWorkTime, stdWorkTime, workRelated,
+                 Result::MissingEmployeeStandardWorkTimeError, std::stoul);
+    MCR_ATTR_NUM(data.maxWorkTime, maxWorkTime, workRelated,
+                 Result::MissingEmployeeMaxWorkTimeError, std::stoul);
+    MCR_ATTR_NUM(data.hourlyWage, hourlyWage, workRelated,
+                 Result::MissingEmployeeHourlyWageError, std::stoul);
 
-    auto telephone = personal.child("telephone");
-    if (!telephone)
-      return Result::MissingEmployeeTelephoneError;
-    data.telephone = telephone.attribute("value").value();
+    std::string roleVal;
+    MCR_ATTR_VAL(roleVal, role, workRelated, Result::MissingEmployeeRoleError);
 
-    auto workRelated = node.child("employeeInfo");
-    if (!workRelated)
-      return Result::MissingEmployeeInfoError;
-
-    auto standardWorkTime = workRelated.child("stdWorkTime");
-    if (!standardWorkTime)
-      return Result::MissingEmployeeStandardWorkTimeError;
-    data.standardWorkTime = std::chrono::minutes(
-        std::stoul(standardWorkTime.attribute("value").value()));
-
-    auto maxWorkTime = workRelated.child("maxWorkTime");
-    if (!maxWorkTime)
-      return Result::MissingEmployeeMaxWorkTimeError;
-    data.maxWorkTime = std::chrono::minutes(
-        std::stoul(maxWorkTime.attribute("value").value()));
-
-    auto hourlyWage = workRelated.child("hourlyWage");
-    if (!hourlyWage)
-      return Result::MissingEmployeeHourlyWageError;
-    data.hourlyWage = std::stoul(hourlyWage.attribute("value").value());
-
-    auto role = workRelated.child("role");
-    if (!role)
-      return Result::MissingEmployeeRoleError;
-    if (auto roleVal = std::string{role.attribute("value").value()};
-        roleVal == "manager")
+    if (roleVal == "manager")
       data.role = EmployeeRole::Manager;
     else if (roleVal == "driver")
       data.role = EmployeeRole::Driver;
@@ -93,17 +117,15 @@ Result XMLDataParser::loadData(std::string const &url) {
     else
       return Result::UnknownEmployeeRoleError;
 
-    auto cardId = workRelated.child("cardId");
-    if (!cardId)
-      return Result::MissingEmployeeCardIdError;
-    data.cardId = cardId.attribute("value").value();
-
-    auto id = workRelated.child("id");
-    if (!id)
-      return Result::MissingEmployeeIdError;
-    data.id = id.attribute("value").value();
+    MCR_ATTR_VAL(data.cardId, cardId, workRelated,
+                 Result::MissingEmployeeCardIdError);
+    MCR_ATTR_VAL(data.id, id, workRelated, Result::MissingEmployeeIdError);
 
     if (auto attendance = node.child("attendance"); attendance) {
+      for (auto instance = attendance.child("instance"); instance;
+           instance = instance.next_sibling()) {
+        auto type = instance.child("type");
+      }
     }
 
     storage_->employees.push_back(std::move(data));
@@ -113,6 +135,11 @@ Result XMLDataParser::loadData(std::string const &url) {
 
   return Result::Success;
 }
+
+#undef MCR_ATTR_NUM
+#undef MCR_XML_NODE
+#undef MCR_ATTR_VAL
+#undef MCR_ATTR
 
 std::vector<XMLDataParser::ID> XMLDataParser::getEmployeeIdentifiers() {
   std::vector<XMLDataParser::ID> ids;
