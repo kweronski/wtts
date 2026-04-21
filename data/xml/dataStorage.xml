@@ -49,9 +49,9 @@
 			<stdWorkTime value="480"/>
 			<maxWorkTime value="600"/>
 			<hourlyWage value="250"/>
-			<role value="manager"/>
+			<role value="chef"/>
 			<cardId value="987654321"/>
-			<id value="987654322"/>
+			<id value="987654341"/>
 		</employeeInfo>
 
 		<attendance>

@@ -189,6 +189,8 @@ Result XMLDataParser::loadData(std::string const &url) {
       }
     }
 
+    if (storage_->employeeMap.contains(data.id))
+      return Result::EmployeeIdNotUniqueError;
     storage_->employees.push_back(std::move(data));
     auto back = &storage_->employees.back();
     storage_->employeeMap.emplace(back->id, back);
@@ -212,8 +214,8 @@ std::vector<XMLDataParser::ID> XMLDataParser::getEmployeeIdentifiers() {
 }
 
 // Personal info
-bool XMLDataParser::getEmployeeActiveStatus(ID const &id) {
-  return storage_->employeeMap.at(id)->status == EmployeeStatus::Active;
+EmployeeStatus XMLDataParser::getEmployeeStatus(ID const &id) {
+  return storage_->employeeMap.at(id)->status;
 }
 std::string XMLDataParser::getEmployeeName(ID const &id) {
   return storage_->employeeMap.at(id)->name;
@@ -238,8 +240,8 @@ unsigned XMLDataParser::getEmployeeMaxWorkTime(ID const &id) {
 unsigned XMLDataParser::getEmployeeHourlyWage(ID const &id) {
   return storage_->employeeMap.at(id)->hourlyWage;
 }
-unsigned XMLDataParser::getEmployeeRole(ID const &id) {
-  return unsigned(storage_->employeeMap.at(id)->role);
+EmployeeRole XMLDataParser::getEmployeeRole(ID const &id) {
+  return storage_->employeeMap.at(id)->role;
 }
 std::string XMLDataParser::getEmployeeCardId(ID const &id) {
   return storage_->employeeMap.at(id)->cardId;
@@ -252,16 +254,5 @@ std::vector<TimePeriod *> XMLDataParser::getEmployeeAttendance(ID const &id) {
   for (auto &a : storage_->employeeMap.at(id)->attendance)
     attendance.push_back(&a);
   return attendance;
-}
-
-std::string makeAttendanceInstStr(TimePeriod const *p) {
-  return std::to_string(unsigned(p->type)) + " (" +
-         std::to_string(p->begin.year) + "/" + std::to_string(p->begin.month) +
-         "/" + std::to_string(p->begin.day) + ", " +
-         std::to_string(p->begin.hour) + ":" + std::to_string(p->begin.minute) +
-         ") - " + "(" + std::to_string(p->end.year) + "/" +
-         std::to_string(p->end.month) + "/" + std::to_string(p->end.day) +
-         ", " + std::to_string(p->end.hour) + ":" +
-         std::to_string(p->end.minute) + ")";
 }
 } // namespace dp

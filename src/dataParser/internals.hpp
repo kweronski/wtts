@@ -2,21 +2,11 @@
 
 #include <list>
 #include <string>
+#include <wtts/dataParser.hpp>
 
 namespace dp {
-enum class EmployeeStatus { Active, Inactive };
-
-enum class EmployeeRole {
-  Unknown,
-  Manager,
-  Driver,
-  Cleaner,
-  Chef,
-  Waiter,
-  Admin
-};
-
 enum class AttendanceType { Vacation, Work, Delivery, Sick };
+std::string to_string(AttendanceType const);
 
 struct TimePoint {
   unsigned year, month, day, hour, minute;

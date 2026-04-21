@@ -1,3 +1,4 @@
+#pragma once
 #include <memory>
 #include <wtts/dataParser.hpp>
 
@@ -16,7 +17,7 @@ public:
   std::vector<TimePeriod *> getEmployeeAttendance(ID const &id) override;
 
   // Personal info
-  bool getEmployeeActiveStatus(ID const &id) override;
+  EmployeeStatus getEmployeeStatus(ID const &id) override;
   std::string getEmployeeName(ID const &id) override;
   std::string getEmployeeSurname(ID const &id) override;
   std::string getEmployeeTelephone(ID const &id) override;
@@ -26,7 +27,7 @@ public:
   unsigned getEmployeeStandardWorkTime(ID const &id) override;
   unsigned getEmployeeMaxWorkTime(ID const &id) override;
   unsigned getEmployeeHourlyWage(ID const &id) override;
-  unsigned getEmployeeRole(ID const &id) override;
+  EmployeeRole getEmployeeRole(ID const &id) override;
   std::string getEmployeeCardId(ID const &id) override;
 
 private:

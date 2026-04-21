@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
 
   dp::DataParser *p = new dp::XMLDataParser{};
   if (auto result = p->loadData(argv[1]); result != dp::Result::Success) {
-    std::cerr << "Failed to parse data with error code: " << unsigned(result)
+    std::cerr << "Failed to parse data with error code: " << to_string(result)
               << std::endl;
     return 2;
   }
@@ -17,7 +17,8 @@ int main(int argc, char **argv) {
   auto ids = p->getEmployeeIdentifiers();
 
   for (auto const &id : ids) {
-    std::cout << "Employee: " << id << std::endl;
+    std::cout << "Employee: Id: " << id << " (";
+    std::cout << to_string(p->getEmployeeStatus(id)) << ")" << std::endl;
     std::cout << "\tName: " << p->getEmployeeName(id) << std::endl;
     std::cout << "\tSurname: " << p->getEmployeeSurname(id) << std::endl;
     std::cout << "\tTelephone: " << p->getEmployeeTelephone(id) << std::endl;
@@ -26,12 +27,14 @@ int main(int argc, char **argv) {
               << std::endl;
     std::cout << "\tMax WT: " << p->getEmployeeMaxWorkTime(id) << std::endl;
     std::cout << "\tHourly Wage: " << p->getEmployeeHourlyWage(id) << std::endl;
-    std::cout << "\tRole: " << p->getEmployeeRole(id) << std::endl;
+    std::cout << "\tRole: " << dp::to_string(p->getEmployeeRole(id))
+              << std::endl;
     std::cout << "\tCardId: " << p->getEmployeeCardId(id) << std::endl;
 
+    std::cout << "\tAttendance:" << std::endl;
     auto attendance = p->getEmployeeAttendance(id);
     for (auto a : attendance)
-      std::cout << "\t" << dp::makeAttendanceInstStr(a) << std::endl;
+      std::cout << "\t\t" << dp::makeAttendanceInstStr(a) << "\n";
   }
 
   delete p;

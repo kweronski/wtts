@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <vector>
 
@@ -32,7 +33,26 @@ enum class Result {
   MissingAttendanceEndMinuteError,
   MissingAttendanceTypeError,
   UnknownAttendanceTypeError,
+  EmployeeIdNotUniqueError
 };
+
+std::string to_string(Result const);
+
+enum class EmployeeStatus { Active, Inactive };
+
+enum class EmployeeRole {
+  Unknown,
+  Manager,
+  Driver,
+  Cleaner,
+  Chef,
+  Waiter,
+  Admin
+};
+
+std::string to_string(EmployeeStatus const);
+
+std::string to_string(EmployeeRole const);
 
 struct TimePeriod;
 std::string makeAttendanceInstStr(TimePeriod const *);
@@ -45,7 +65,7 @@ public:
   virtual std::vector<TimePeriod *> getEmployeeAttendance(ID const &id) = 0;
 
   // Personal info
-  virtual bool getEmployeeActiveStatus(ID const &id) = 0;
+  virtual EmployeeStatus getEmployeeStatus(ID const &id) = 0;
   virtual std::string getEmployeeName(ID const &id) = 0;
   virtual std::string getEmployeeSurname(ID const &id) = 0;
   virtual std::string getEmployeeTelephone(ID const &id) = 0;
@@ -55,7 +75,7 @@ public:
   virtual unsigned getEmployeeStandardWorkTime(ID const &id) = 0;
   virtual unsigned getEmployeeMaxWorkTime(ID const &id) = 0;
   virtual unsigned getEmployeeHourlyWage(ID const &id) = 0;
-  virtual unsigned getEmployeeRole(ID const &id) = 0;
+  virtual EmployeeRole getEmployeeRole(ID const &id) = 0;
   virtual std::string getEmployeeCardId(ID const &id) = 0;
 
   // Attendance info
