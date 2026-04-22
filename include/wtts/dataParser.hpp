@@ -45,8 +45,8 @@ enum class EmployeeRole {
   Manager,
   Driver,
   Cleaner,
-  Chef,
   Waiter,
+  Chef,
   Admin
 };
 
