@@ -1,8 +1,14 @@
 #pragma once
 
+#include <wtts/logInfo.hpp>
+
 namespace es {
-/* TODO: Implement employee interface */
-class Employee {};
+enum class Result { Success, EmployeeIdNotUniqueError, EmployeeNotFoundError };
+
+class Employee {
+public:
+  Result checkIn();
+};
 
 class Driver : public Employee {};
 

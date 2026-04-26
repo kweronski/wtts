@@ -1,23 +1,12 @@
 #pragma once
 
 #include <list>
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 #include <wtts/dataParser.hpp>
+#include <wtts/logInfo.hpp>
 
 namespace dp {
-enum class AttendanceType { Vacation, Work, Delivery, Sick };
-std::string to_string(AttendanceType const);
-
-struct TimePoint {
-  unsigned year, month, day, hour, minute;
-};
-
-struct TimePeriod {
-  TimePoint begin, end;
-  AttendanceType type;
-};
-
 template <typename T> struct Employee {
   EmployeeStatus status;
   std::string name, surname, telephone, email;
@@ -26,7 +15,7 @@ template <typename T> struct Employee {
   T id;
   unsigned standardWorkTime, maxWorkTime;
   unsigned hourlyWage{};
-  std::list<TimePeriod> attendance;
+  std::list<tu::TimePeriod> attendance;
 };
 
 struct DataStorage {

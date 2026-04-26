@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <wtts/dataParser.hpp>
+#include <wtts/logInfo.hpp>
 
 namespace pugi {
 class xml_document;
@@ -11,10 +12,10 @@ struct DataStorage;
 
 class XMLDataParser : public DataParser {
 public:
-  XMLDataParser();
-  Result loadData(std::string const &filePath) override;
+  XMLDataParser(std::string const &url);
+  Result loadData() override;
   std::vector<ID> getEmployeeIdentifiers() override;
-  std::vector<TimePeriod *> getEmployeeAttendance(ID const &id) override;
+  std::vector<tu::TimePeriod *> getEmployeeAttendance(ID const &id) override;
 
   // Personal info
   EmployeeStatus getEmployeeStatus(ID const &id) override;

@@ -1,11 +1,13 @@
 #include <pugixml.hpp>
+#include <wtts/logInfo.hpp>
 #include <wtts/xmlParser.hpp>
 
 #include "internals.hpp"
 
 namespace dp {
-XMLDataParser::XMLDataParser()
-    : document_{new pugi::xml_document{}, [](auto p) { delete p; }},
+XMLDataParser::XMLDataParser(std::string const &url)
+    : DataParser(url),
+      document_{new pugi::xml_document{}, [](auto p) { delete p; }},
       storage_{new DataStorage{}, [](auto p) { delete p; }} {}
 
 #ifdef MCR_XML_NODE
@@ -84,13 +86,13 @@ XMLDataParser::XMLDataParser()
     std::string attType;                                                       \
     MCR_ATTR_VAL(attType, type, node, Result::MissingAttendanceTypeError);     \
     if (attType == "vacation")                                                 \
-      time.type = AttendanceType::Vacation;                                    \
+      time.type = tu::AttendanceType::Vacation;                                \
     else if (attType == "delivery")                                            \
-      time.type = AttendanceType::Delivery;                                    \
+      time.type = tu::AttendanceType::Delivery;                                \
     else if (attType == "work")                                                \
-      time.type = AttendanceType::Work;                                        \
+      time.type = tu::AttendanceType::Work;                                    \
     else if (attType == "sick")                                                \
-      time.type = AttendanceType::Sick;                                        \
+      time.type = tu::AttendanceType::Sick;                                    \
     else                                                                       \
       return Result::UnknownAttendanceTypeError;                               \
                                                                                \
@@ -117,8 +119,8 @@ XMLDataParser::XMLDataParser()
             Result::MissingAttendanceBeginMinuteError, std::stoul);            \
   }
 
-Result XMLDataParser::loadData(std::string const &url) {
-  if (!document_->load_file(url.c_str()))
+Result XMLDataParser::loadData() {
+  if (!document_->load_file(url_.c_str()))
     return Result::CouldNotOpenFileError;
 
   auto root = document_->first_child();
@@ -183,7 +185,7 @@ Result XMLDataParser::loadData(std::string const &url) {
     if (auto attendance = node.child("attendance"); attendance) {
       for (auto instance = attendance.child("instance"); instance;
            instance = instance.next_sibling()) {
-        TimePeriod time{};
+        tu::TimePeriod time{};
         MCR_TIME(time, instance);
         data.attendance.push_back(std::move(time));
       }
@@ -248,8 +250,9 @@ std::string XMLDataParser::getEmployeeCardId(ID const &id) {
 }
 
 // Attendance info
-std::vector<TimePeriod *> XMLDataParser::getEmployeeAttendance(ID const &id) {
-  std::vector<TimePeriod *> attendance;
+std::vector<tu::TimePeriod *>
+XMLDataParser::getEmployeeAttendance(ID const &id) {
+  std::vector<tu::TimePeriod *> attendance;
   attendance.reserve(storage_->employeeMap.at(id)->attendance.size());
   for (auto &a : storage_->employeeMap.at(id)->attendance)
     attendance.push_back(&a);

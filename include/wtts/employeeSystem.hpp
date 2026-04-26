@@ -2,12 +2,15 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <wtts/employee.hpp>
 
-namespace es {
-enum class Result { Success, EmployeeIdNotUniqueError, EmployeeNotFoundError };
+namespace dp {
+class DataParser;
+}
 
+namespace es {
 class EmployeeSystem {
 public:
   EmployeeSystem() = default;
@@ -24,12 +27,12 @@ public:
                                      std::string const &surname);
 
 private:
-  std::vector<std::unique_ptr<Employee>> employees;
-};
+  std::vector<std::unique_ptr<Employee>> employees_;
+  std::vector<std::unique_ptr<Employee>> drivers_;
+  std::vector<std::unique_ptr<Employee>> managers_;
+  std::vector<std::unique_ptr<Employee>> admins_;
 
-class EmployeeSystemFactory {
-public:
-  static std::unique_ptr<EmployeeSystem>
-  createFromXML(std::string const &filePath);
+  using Attendance = int;
+  std::unordered_map<Employee *, Attendance> attendance_;
 };
 } // namespace es

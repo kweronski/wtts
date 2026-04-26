@@ -7,11 +7,14 @@ add_library(dataparser
 	dataParser/xmlParser.cpp
 	dataParser/dataParser.cpp
 	dataParser/internals.cpp
+	logInfo.cpp
 )
 target_link_libraries(dataparser PRIVATE pugixml::pugixml)
 
 add_library(employeeSystem
-	employeeSystem/employeeSystem.cpp)
+	employeeSystem/employeeSystem.cpp
+	employeeSystem/factory.cpp
+	logInfo.cpp)
 
 add_executable(wttsapp main.cpp)
 target_link_libraries(wttsapp PRIVATE dataparser employeeSystem)

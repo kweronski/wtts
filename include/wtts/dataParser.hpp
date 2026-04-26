@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <wtts/logInfo.hpp>
 
 namespace dp {
 enum class Result {
@@ -59,10 +60,11 @@ std::string makeAttendanceInstStr(TimePeriod const *);
 
 class DataParser {
 public:
-  virtual Result loadData(std::string const &url) = 0;
+  DataParser(std::string const &url) : url_{url} {}
+  virtual Result loadData() = 0;
   using ID = std::string;
   virtual std::vector<ID> getEmployeeIdentifiers() = 0;
-  virtual std::vector<TimePeriod *> getEmployeeAttendance(ID const &id) = 0;
+  virtual std::vector<tu::TimePeriod *> getEmployeeAttendance(ID const &id) = 0;
 
   // Personal info
   virtual EmployeeStatus getEmployeeStatus(ID const &id) = 0;
@@ -80,5 +82,8 @@ public:
 
   // Attendance info
   virtual ~DataParser() = default;
+
+protected:
+  std::string url_;
 };
 } // namespace dp
