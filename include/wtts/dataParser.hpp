@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <wtts/employeeData.hpp>
 #include <wtts/logInfo.hpp>
 
 namespace dp {
@@ -41,19 +42,7 @@ std::string to_string(Result const);
 
 enum class EmployeeStatus { Active, Inactive };
 
-enum class EmployeeRole {
-  Unknown,
-  Manager,
-  Driver,
-  Cleaner,
-  Waiter,
-  Chef,
-  Admin
-};
-
 std::string to_string(EmployeeStatus const);
-
-std::string to_string(EmployeeRole const);
 
 struct TimePeriod;
 std::string makeAttendanceInstStr(TimePeriod const *);
@@ -77,7 +66,7 @@ public:
   virtual unsigned getEmployeeStandardWorkTime(ID const &id) = 0;
   virtual unsigned getEmployeeMaxWorkTime(ID const &id) = 0;
   virtual unsigned getEmployeeHourlyWage(ID const &id) = 0;
-  virtual EmployeeRole getEmployeeRole(ID const &id) = 0;
+  virtual es::EmployeeRole getEmployeeRole(ID const &id) = 0;
   virtual std::string getEmployeeCardId(ID const &id) = 0;
 
   // Attendance info

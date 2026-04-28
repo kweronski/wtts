@@ -10,7 +10,7 @@ namespace dp {
 template <typename T> struct Employee {
   EmployeeStatus status;
   std::string name, surname, telephone, email;
-  EmployeeRole role;
+  es::EmployeeRole role;
   std::string cardId;
   T id;
   unsigned standardWorkTime, maxWorkTime;

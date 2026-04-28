@@ -28,7 +28,7 @@ public:
   unsigned getEmployeeStandardWorkTime(ID const &id) override;
   unsigned getEmployeeMaxWorkTime(ID const &id) override;
   unsigned getEmployeeHourlyWage(ID const &id) override;
-  EmployeeRole getEmployeeRole(ID const &id) override;
+  es::EmployeeRole getEmployeeRole(ID const &id) override;
   std::string getEmployeeCardId(ID const &id) override;
 
 private:

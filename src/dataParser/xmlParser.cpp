@@ -164,17 +164,17 @@ Result XMLDataParser::loadData() {
     MCR_ATTR_VAL(roleVal, role, workRelated, Result::MissingEmployeeRoleError);
 
     if (roleVal == "manager")
-      data.role = EmployeeRole::Manager;
+      data.role = es::EmployeeRole::Manager;
     else if (roleVal == "driver")
-      data.role = EmployeeRole::Driver;
+      data.role = es::EmployeeRole::Driver;
     else if (roleVal == "cleaner")
-      data.role = EmployeeRole::Cleaner;
+      data.role = es::EmployeeRole::Cleaner;
     else if (roleVal == "chef")
-      data.role = EmployeeRole::Chef;
+      data.role = es::EmployeeRole::Chef;
     else if (roleVal == "waiter")
-      data.role = EmployeeRole::Waiter;
+      data.role = es::EmployeeRole::Waiter;
     else if (roleVal == "admin")
-      data.role = EmployeeRole::Admin;
+      data.role = es::EmployeeRole::Admin;
     else
       return Result::UnknownEmployeeRoleError;
 
@@ -242,7 +242,7 @@ unsigned XMLDataParser::getEmployeeMaxWorkTime(ID const &id) {
 unsigned XMLDataParser::getEmployeeHourlyWage(ID const &id) {
   return storage_->employeeMap.at(id)->hourlyWage;
 }
-EmployeeRole XMLDataParser::getEmployeeRole(ID const &id) {
+es::EmployeeRole XMLDataParser::getEmployeeRole(ID const &id) {
   return storage_->employeeMap.at(id)->role;
 }
 std::string XMLDataParser::getEmployeeCardId(ID const &id) {

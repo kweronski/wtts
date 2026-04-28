@@ -16,29 +16,29 @@ std::string to_string(EmployeeStatus const code) {
   return value;
 }
 
-std::string to_string(EmployeeRole const code) {
+std::string to_string(es::EmployeeRole const code) {
   std::string value;
 
   switch (code) {
-  case EmployeeRole::Unknown:
+  case es::EmployeeRole::Unknown:
     value = "Unknown";
     break;
-  case EmployeeRole::Manager:
+  case es::EmployeeRole::Manager:
     value = "Manager";
     break;
-  case EmployeeRole::Driver:
+  case es::EmployeeRole::Driver:
     value = "Driver";
     break;
-  case EmployeeRole::Cleaner:
+  case es::EmployeeRole::Cleaner:
     value = "Cleaner";
     break;
-  case EmployeeRole::Chef:
+  case es::EmployeeRole::Chef:
     value = "Chef";
     break;
-  case EmployeeRole::Waiter:
+  case es::EmployeeRole::Waiter:
     value = "Waiter";
     break;
-  case EmployeeRole::Admin:
+  case es::EmployeeRole::Admin:
     value = "Admin";
     break;
   }

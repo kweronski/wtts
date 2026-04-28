@@ -1,24 +1,20 @@
 #pragma once
 
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include <wtts/employee.hpp>
-
-namespace dp {
-class DataParser;
-}
 
 namespace es {
 class EmployeeSystem {
 public:
   EmployeeSystem() = default;
 
-  Result addEmployee(std::unique_ptr<Employee>);
+  Result addEmployee(Employee **const);
   Result removeEmployee(Employee const *);
-  Result activateEmployee(Employee *);
-  Result deactivateEmployee(Employee *);
+  Result autoCheckOut();
 
   template <typename T> T *getEmployeeById(std::string const &id);
 
@@ -27,12 +23,12 @@ public:
                                      std::string const &surname);
 
 private:
-  std::vector<std::unique_ptr<Employee>> employees_;
-  std::vector<std::unique_ptr<Employee>> drivers_;
-  std::vector<std::unique_ptr<Employee>> managers_;
-  std::vector<std::unique_ptr<Employee>> admins_;
+  std::set<std::unique_ptr<Employee>> employees_;
+  std::set<std::unique_ptr<Driver>> drivers_;
+  std::set<std::unique_ptr<Manager>> managers_;
+  std::set<std::unique_ptr<Admin>> admins_;
 
-  using Attendance = int;
-  std::unordered_map<Employee *, Attendance> attendance_;
+  std::unordered_map<Employee *, AttendanceData> attendance_;
+  std::unordered_map<Employee *, PersonnelData> personnel_;
 };
 } // namespace es

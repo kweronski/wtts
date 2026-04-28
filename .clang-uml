@@ -1,0 +1,16 @@
+compilation_database_dir: ./build
+
+output_directory: ./build/diagrams
+
+diagrams:
+  overview:
+    type: class
+
+    glob:
+      - src/**/*.cpp
+
+    include:
+      namespaces:
+        - dp
+        - es
+        - tu
