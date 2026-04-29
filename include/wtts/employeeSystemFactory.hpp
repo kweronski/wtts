@@ -6,6 +6,6 @@
 namespace es {
 class EmployeeSystemFactory {
 public:
-  static std::unique_ptr<EmployeeSystem> create(dp::DataParser const *parser);
+  static std::unique_ptr<EmployeeSystem> create(dp::DataParser *parser);
 };
 } // namespace es

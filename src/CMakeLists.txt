@@ -15,6 +15,7 @@ add_library(employeeSystem
 	employeeSystem/employeeSystem.cpp
 	employeeSystem/factory.cpp
 	logInfo.cpp)
+target_link_libraries(employeeSystem PRIVATE dataparser)
 
 add_executable(wttsapp main.cpp)
-target_link_libraries(wttsapp PRIVATE dataparser employeeSystem)
+target_link_libraries(wttsapp PRIVATE employeeSystem)

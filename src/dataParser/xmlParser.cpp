@@ -208,7 +208,7 @@ Result XMLDataParser::loadData() {
 #undef MCR_NUM
 #undef MCR_TIME
 
-std::vector<XMLDataParser::ID> XMLDataParser::getEmployeeIdentifiers() {
+std::vector<XMLDataParser::ID> XMLDataParser::getEmployeeIdentifiers() const {
   std::vector<XMLDataParser::ID> ids;
   for (auto const &e : storage_->employees)
     ids.push_back(e.id);
@@ -216,42 +216,42 @@ std::vector<XMLDataParser::ID> XMLDataParser::getEmployeeIdentifiers() {
 }
 
 // Personal info
-EmployeeStatus XMLDataParser::getEmployeeStatus(ID const &id) {
+EmployeeStatus XMLDataParser::getEmployeeStatus(ID const &id) const {
   return storage_->employeeMap.at(id)->status;
 }
-std::string XMLDataParser::getEmployeeName(ID const &id) {
+std::string XMLDataParser::getEmployeeName(ID const &id) const {
   return storage_->employeeMap.at(id)->name;
 }
-std::string XMLDataParser::getEmployeeSurname(ID const &id) {
+std::string XMLDataParser::getEmployeeSurname(ID const &id) const {
   return storage_->employeeMap.at(id)->surname;
 }
-std::string XMLDataParser::getEmployeeTelephone(ID const &id) {
+std::string XMLDataParser::getEmployeeTelephone(ID const &id) const {
   return storage_->employeeMap.at(id)->telephone;
 }
-std::string XMLDataParser::getEmployeeEmail(ID const &id) {
+std::string XMLDataParser::getEmployeeEmail(ID const &id) const {
   return storage_->employeeMap.at(id)->email;
 }
 
 // Employee info
-unsigned XMLDataParser::getEmployeeStandardWorkTime(ID const &id) {
+unsigned XMLDataParser::getEmployeeStandardWorkTime(ID const &id) const {
   return storage_->employeeMap.at(id)->standardWorkTime;
 }
-unsigned XMLDataParser::getEmployeeMaxWorkTime(ID const &id) {
+unsigned XMLDataParser::getEmployeeMaxWorkTime(ID const &id) const {
   return storage_->employeeMap.at(id)->maxWorkTime;
 }
-unsigned XMLDataParser::getEmployeeHourlyWage(ID const &id) {
+unsigned XMLDataParser::getEmployeeHourlyWage(ID const &id) const {
   return storage_->employeeMap.at(id)->hourlyWage;
 }
-es::EmployeeRole XMLDataParser::getEmployeeRole(ID const &id) {
+es::EmployeeRole XMLDataParser::getEmployeeRole(ID const &id) const {
   return storage_->employeeMap.at(id)->role;
 }
-std::string XMLDataParser::getEmployeeCardId(ID const &id) {
+std::string XMLDataParser::getEmployeeCardId(ID const &id) const {
   return storage_->employeeMap.at(id)->cardId;
 }
 
 // Attendance info
 std::vector<tu::TimePeriod *>
-XMLDataParser::getEmployeeAttendance(ID const &id) {
+XMLDataParser::getEmployeeAttendance(ID const &id) const {
   std::vector<tu::TimePeriod *> attendance;
   attendance.reserve(storage_->employeeMap.at(id)->attendance.size());
   for (auto &a : storage_->employeeMap.at(id)->attendance)

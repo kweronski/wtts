@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include <wtts/esResult.hpp>
 #include <wtts/logInfo.hpp>
 
@@ -18,7 +19,17 @@ std::string to_string(EmployeeRole const);
 
 class AttendanceData {
 public:
-  Result addTimePeriod(tu::TimePeriod);
+  tu::TimePeriod *getCurrentTimePeriod() { return &current_; }
+
+  // Verify the validity of current_ and add it to attendance_
+  Result addTimePeriod();
+
+  // Look through attendance_ and calculate hours worked since a specific time
+  Result getHoursWorkedSince(tu::TimePoint const &) const;
+
+private:
+  tu::TimePeriod current_;
+  std::list<tu::TimePeriod> attendance_;
 };
 
 class PersonnelData {
@@ -35,5 +46,12 @@ public:
   unsigned getEmployeeHourlyWage(ID const &id);
   EmployeeRole getEmployeeRole(ID const &id);
   std::string getEmployeeCardId(ID const &id);
+
+private:
+  bool active_{};
+  std::string name_, surname_, telephone_, email_;
+  unsigned workTime_{}, maxWorkTime_{}, hourlyWage_{};
+  EmployeeRole role_;
+  std::string cardId_;
 };
 } // namespace es
