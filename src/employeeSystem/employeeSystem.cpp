@@ -3,6 +3,41 @@
 #include <wtts/logInfo.hpp>
 
 namespace es {
+Employee *EmployeeSystem::getEmployeeById(std::string const &id) const {
+  for (auto &e : employees_)
+    if (e->getEmployeeId() == id)
+      return e.get();
+  for (auto &e : drivers_)
+    if (e->getEmployeeId() == id)
+      return e.get();
+  for (auto &e : managers_)
+    if (e->getEmployeeId() == id)
+      return e.get();
+  for (auto &e : admins_)
+    if (e->getEmployeeId() == id)
+      return e.get();
+  return nullptr;
+}
+
+std::vector<Employee *>
+EmployeeSystem::getEmployeeByName(std::string const &name,
+                                  std::string const &surname) const {
+  std::vector<Employee *> empl;
+  for (auto &e : employees_)
+    if (e->getEmployeeName() == name && e->getEmployeeSurname() == surname)
+      empl.push_back(e.get());
+  for (auto &e : drivers_)
+    if (e->getEmployeeName() == name && e->getEmployeeSurname() == surname)
+      empl.push_back(e.get());
+  for (auto &e : managers_)
+    if (e->getEmployeeName() == name && e->getEmployeeSurname() == surname)
+      empl.push_back(e.get());
+  for (auto &e : admins_)
+    if (e->getEmployeeName() == name && e->getEmployeeSurname() == surname)
+      empl.push_back(e.get());
+  return empl;
+}
+
 std::string to_string(es::EmployeeRole const code) {
   std::string value;
 
@@ -27,26 +62,50 @@ std::string to_string(es::EmployeeRole const code) {
   return value;
 }
 
-void EmployeeSystem::printData() const {
-  for (auto const &e : employees_) {
-    auto p = personnel_.at(e.get()).get();
-    std::cout << "Employee: Id: " << p->getEmployeeId() << " (";
-    std::cout << std::boolalpha << p->getEmployeeActive() << ")" << std::endl;
-    std::cout << "\tName: " << p->getEmployeeName() << std::endl;
-    std::cout << "\tSurname: " << p->getEmployeeSurname() << std::endl;
-    std::cout << "\tTelephone: " << p->getEmployeeTelephone() << std::endl;
-    std::cout << "\tEmail: " << p->getEmployeeEmail() << std::endl;
-    std::cout << "\tStandard WT: " << p->getEmployeeStandardWorkTime()
-              << std::endl;
-    std::cout << "\tMax WT: " << p->getEmployeeMaxWorkTime() << std::endl;
-    std::cout << "\tHourly Wage: " << p->getEmployeeHourlyWage() << std::endl;
-    std::cout << "\tRole: " << to_string(p->getEmployeeRole()) << std::endl;
-    std::cout << "\tCardId: " << p->getEmployeeCardId() << std::endl;
+void printEmployeeData(PersonnelData *p, AttendanceData *attendance) {
+  if (!p)
+    return;
+  std::cout << "Employee: Id: " << p->getEmployeeId() << " (";
+  std::cout << (p->getEmployeeActive() ? "active" : "inactive") << ")"
+            << std::endl;
+  std::cout << "\tName: " << p->getEmployeeName() << std::endl;
+  std::cout << "\tSurname: " << p->getEmployeeSurname() << std::endl;
+  std::cout << "\tTelephone: " << p->getEmployeeTelephone() << std::endl;
+  std::cout << "\tEmail: " << p->getEmployeeEmail() << std::endl;
+  std::cout << "\tStandard WT: " << p->getEmployeeStandardWorkTime()
+            << std::endl;
+  std::cout << "\tMax WT: " << p->getEmployeeMaxWorkTime() << std::endl;
+  std::cout << "\tHourly Wage: " << p->getEmployeeHourlyWage() << std::endl;
+  std::cout << "\tRole: " << to_string(p->getEmployeeRole()) << std::endl;
+  std::cout << "\tCardId: " << p->getEmployeeCardId() << std::endl;
 
-    std::cout << "\tAttendance:" << std::endl;
-    auto attendance = attendance_.at(e.get()).get();
-    for (auto a : attendance->getRecords())
-      std::cout << "\t\t" << tu::makeAttendanceInstStr(&a) << "\n";
+  if (!attendance)
+    return;
+  std::cout << "\tAttendance:" << std::endl;
+  for (auto a : attendance->getRecords())
+    std::cout << "\t\t" << tu::makeAttendanceInstStr(&a) << "\n";
+}
+
+void EmployeeSystem::printData(Employee *const empl,
+                               bool skipAttendance) const {
+  if (empl) {
+    auto p = personnel_.at(empl).get();
+    if (skipAttendance)
+      printEmployeeData(p, 0);
+    else {
+      auto attendance = attendance_.at(empl).get();
+      printEmployeeData(p, attendance);
+    }
+  } else {
+    for (auto const &e : employees_) {
+      auto p = personnel_.at(e.get()).get();
+      if (skipAttendance)
+        printEmployeeData(p, 0);
+      else {
+        auto attendance = attendance_.at(e.get()).get();
+        printEmployeeData(p, attendance);
+      }
+    }
   }
 }
 
@@ -102,7 +161,7 @@ Result EmployeeSystem::addEmployee(Manager **const e, PersonnelData **const p,
   auto pd = std::make_unique<PersonnelData>();
   auto ad = std::make_unique<AttendanceData>();
 
-  auto ptr = std::make_unique<Manager>(pd.get(), ad.get());
+  auto ptr = std::make_unique<Manager>(pd.get(), ad.get(), this);
   *e = ptr.get();
   employees_.emplace(std::move(ptr));
 
@@ -124,7 +183,7 @@ Result EmployeeSystem::addEmployee(Admin **const e, PersonnelData **const p,
   auto pd = std::make_unique<PersonnelData>();
   auto ad = std::make_unique<AttendanceData>();
 
-  auto ptr = std::make_unique<Admin>(pd.get(), ad.get());
+  auto ptr = std::make_unique<Admin>(pd.get(), ad.get(), this);
   *e = ptr.get();
   employees_.emplace(std::move(ptr));
 
@@ -138,5 +197,15 @@ Result EmployeeSystem::addEmployee(Admin **const e, PersonnelData **const p,
   return Result::Success;
 }
 
-Result EmployeeSystem::autoCheckOut() { return Result::Success; }
+Result EmployeeSystem::autoCheckOut() {
+  for (auto &e : employees_)
+    e->checkOut();
+  for (auto &e : drivers_)
+    e->checkOut();
+  for (auto &e : managers_)
+    e->checkOut();
+  for (auto &e : admins_)
+    e->checkOut();
+  return Result::Success;
+}
 } // namespace es

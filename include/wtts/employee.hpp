@@ -12,6 +12,32 @@ public:
   Result checkOut();
   double calculatePay(tu::TimePoint const &start) const;
 
+  bool getEmployeeActive() const { return personnel_->getEmployeeActive(); }
+  std::string getEmployeeName() const { return personnel_->getEmployeeName(); }
+  std::string getEmployeeSurname() const {
+    return personnel_->getEmployeeSurname();
+  }
+  std::string getEmployeeTelephone() const {
+    return personnel_->getEmployeeTelephone();
+  }
+  std::string getEmployeeEmail() const {
+    return personnel_->getEmployeeEmail();
+  }
+  unsigned getEmployeeStandardWorkTime() const {
+    return personnel_->getEmployeeStandardWorkTime();
+  }
+  unsigned getEmployeeMaxWorkTime() const {
+    return personnel_->getEmployeeMaxWorkTime();
+  }
+  unsigned getEmployeeHourlyWage() const {
+    return personnel_->getEmployeeHourlyWage();
+  }
+  EmployeeRole getEmployeeRole() const { return personnel_->getEmployeeRole(); }
+  std::string getEmployeeCardId() const {
+    return personnel_->getEmployeeCardId();
+  }
+  std::string getEmployeeId() const { return personnel_->getEmployeeId(); }
+
 protected:
   PersonnelData *personnel_;
   AttendanceData *attendance_;
@@ -24,24 +50,32 @@ public:
   Result logDeliveryEnd();
 };
 
+class EmployeeSystem;
+
 class GeneralAdmin {
 public:
+  GeneralAdmin(EmployeeSystem *sys) : system_{sys} {}
   void updateAbsence(Employee *const);
   void updatePayment(Employee *const);
   void editEmployee(Employee *const);
   void registerEmployee(Employee **);
   void activateemployee(Employee *const);
   void deactivateemployee(Employee *const);
+
+protected:
+  EmployeeSystem *system_;
 };
 
 class Manager : public Employee, public GeneralAdmin {
 public:
-  Manager(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
+  Manager(PersonnelData *p, AttendanceData *a, EmployeeSystem *s)
+      : Employee(p, a), GeneralAdmin(s) {}
 };
 
 class Admin : public Employee, public GeneralAdmin {
 public:
-  Admin(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
+  Admin(PersonnelData *p, AttendanceData *a, EmployeeSystem *s)
+      : Employee(p, a), GeneralAdmin(s) {}
   void editSettings();
   void removeEmployee(Employee *const);
 };

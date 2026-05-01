@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctime>
 #include <string>
 
 namespace tu {
@@ -8,6 +9,8 @@ std::string to_string(AttendanceType const);
 
 struct TimePoint {
   unsigned year, month, day, hour, minute;
+
+  void populate(); // Fills data members with current time
 };
 
 struct TimePeriod {
@@ -16,4 +19,10 @@ struct TimePeriod {
 };
 
 std::string makeAttendanceInstStr(TimePeriod const *);
+
+bool operator>=(TimePoint const &lhs, TimePoint const &rhs);
+
+double operator-(TimePoint const &lhs, TimePoint const &rhs);
+
+std::time_t to_time_t(TimePoint const &tp);
 } // namespace tu

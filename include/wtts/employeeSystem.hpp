@@ -27,7 +27,7 @@ public:
   std::vector<Employee *> getEmployeeByName(std::string const &name,
                                             std::string const &surname) const;
 
-  void printData() const;
+  void printData(Employee *const = 0, bool skipAttendance = false) const;
 
 private:
   std::set<std::unique_ptr<Employee>> employees_;
