@@ -6,17 +6,20 @@
 namespace es {
 class Employee {
 public:
+  Employee(PersonnelData *p, AttendanceData *a)
+      : personnel_{p}, attendance_{a} {}
   Result checkIn();
   Result checkOut();
   double calculatePay(tu::TimePoint const &start) const;
 
 protected:
-  AttendanceData *attendance_;
   PersonnelData *personnel_;
+  AttendanceData *attendance_;
 };
 
 class Driver : public Employee {
 public:
+  Driver(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
   Result logDeliveryBegin();
   Result logDeliveryEnd();
 };
@@ -33,10 +36,12 @@ public:
 
 class Manager : public Employee, public GeneralAdmin {
 public:
+  Manager(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
 };
 
 class Admin : public Employee, public GeneralAdmin {
 public:
+  Admin(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
   void editSettings();
   void removeEmployee(Employee *const);
 };

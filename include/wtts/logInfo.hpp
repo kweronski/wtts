@@ -14,4 +14,6 @@ struct TimePeriod {
   TimePoint begin, end;
   AttendanceType type;
 };
+
+std::string makeAttendanceInstStr(TimePeriod const *);
 } // namespace tu

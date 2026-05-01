@@ -44,9 +44,6 @@ enum class EmployeeStatus { Active, Inactive };
 
 std::string to_string(EmployeeStatus const);
 
-struct TimePeriod;
-std::string makeAttendanceInstStr(TimePeriod const *);
-
 class DataParser {
 public:
   DataParser(std::string const &url) : url_{url} {}

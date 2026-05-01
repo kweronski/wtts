@@ -167,14 +167,10 @@ Result XMLDataParser::loadData() {
       data.role = es::EmployeeRole::Manager;
     else if (roleVal == "driver")
       data.role = es::EmployeeRole::Driver;
-    else if (roleVal == "cleaner")
-      data.role = es::EmployeeRole::Cleaner;
-    else if (roleVal == "chef")
-      data.role = es::EmployeeRole::Chef;
-    else if (roleVal == "waiter")
-      data.role = es::EmployeeRole::Waiter;
     else if (roleVal == "admin")
       data.role = es::EmployeeRole::Admin;
+    else if (roleVal == "employee")
+      data.role = es::EmployeeRole::Employee;
     else
       return Result::UnknownEmployeeRoleError;
 

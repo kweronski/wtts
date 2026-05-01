@@ -49,7 +49,7 @@
 			<stdWorkTime value="480"/>
 			<maxWorkTime value="600"/>
 			<hourlyWage value="250"/>
-			<role value="chef"/>
+			<role value="employee"/>
 			<cardId value="987654321"/>
 			<id value="987654341"/>
 		</employeeInfo>

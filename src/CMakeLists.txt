@@ -14,6 +14,7 @@ target_link_libraries(dataparser PRIVATE pugixml::pugixml)
 add_library(employeeSystem
 	employeeSystem/employeeSystem.cpp
 	employeeSystem/factory.cpp
+	employeeSystem/employeeData.cpp
 	logInfo.cpp)
 target_link_libraries(employeeSystem PRIVATE dataparser)
 

@@ -12,15 +12,22 @@ class EmployeeSystem {
 public:
   EmployeeSystem() = default;
 
-  Result addEmployee(Employee **const);
-  Result removeEmployee(Employee const *);
+  Result addEmployee(Employee **const, PersonnelData **const,
+                     AttendanceData **const);
+  Result addEmployee(Driver **const, PersonnelData **const,
+                     AttendanceData **const);
+  Result addEmployee(Manager **const, PersonnelData **const,
+                     AttendanceData **const);
+  Result addEmployee(Admin **const, PersonnelData **const,
+                     AttendanceData **const);
   Result autoCheckOut();
 
-  template <typename T> T *getEmployeeById(std::string const &id);
+  Employee *getEmployeeById(std::string const &id) const;
 
-  template <typename T>
-  std::vector<T *> getEmployeeByName(std::string const &name,
-                                     std::string const &surname);
+  std::vector<Employee *> getEmployeeByName(std::string const &name,
+                                            std::string const &surname) const;
+
+  void printData() const;
 
 private:
   std::set<std::unique_ptr<Employee>> employees_;
@@ -28,7 +35,7 @@ private:
   std::set<std::unique_ptr<Manager>> managers_;
   std::set<std::unique_ptr<Admin>> admins_;
 
-  std::unordered_map<Employee *, AttendanceData> attendance_;
-  std::unordered_map<Employee *, PersonnelData> personnel_;
+  std::unordered_map<Employee *, std::unique_ptr<AttendanceData>> attendance_;
+  std::unordered_map<Employee *, std::unique_ptr<PersonnelData>> personnel_;
 };
 } // namespace es
