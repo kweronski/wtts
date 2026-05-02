@@ -1,10 +1,10 @@
 <root>
 	<employee active="true">
 		<personalInfo>
-			<name value="Mati"/>
-			<surname value="Pati"/>
-			<email value="mati@pati.com"/>
-			<telephone value="123456789"/>
+			<name value="Jan"/>
+			<surname value="Kowalski"/>
+			<email value="jan@kowalski.com"/>
+			<telephone value="111222333"/>
 		</personalInfo>
 
 		<employeeInfo>
@@ -12,8 +12,8 @@
 			<maxWorkTime value="600"/>
 			<hourlyWage value="250"/>
 			<role value="manager"/>
-			<cardId value="987654321"/>
-			<id value="987654321"/>
+			<cardId value="ABCD4321"/>
+			<id value="1"/>
 		</employeeInfo>
 
 		<attendance>
@@ -39,9 +39,9 @@
 
 	<employee active="false">
 		<personalInfo>
-			<name value="Jason"/>
-			<surname value="Green"/>
-			<email value="jason@pati.com"/>
+			<name value="Tadeusz"/>
+			<surname value="Batyr"/>
+			<email value="tbatyr@poczta.com"/>
 			<telephone value="123456789"/>
 		</personalInfo>
 
@@ -50,8 +50,47 @@
 			<maxWorkTime value="600"/>
 			<hourlyWage value="250"/>
 			<role value="employee"/>
-			<cardId value="987654321"/>
-			<id value="987654341"/>
+			<cardId value="ABCD4322"/>
+			<id value="2"/>
+		</employeeInfo>
+
+		<attendance>
+			<instance>
+				<type value="sick"/>
+				<begin year="2026" month="1" day="1" hour="0" minute="0"/>
+				<end year="2026" month="2" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="vacation"/>
+				<begin year="2026" month="2" day="2" hour="0" minute="0"/>
+				<end year="2026" month="3" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="work"/>
+				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
+				<end year="2026" month="4" day="2" hour="16" minute="0"/>
+			</instance>
+		</attendance>
+	</employee>
+
+
+	<employee active="false">
+		<personalInfo>
+			<name value="Test01_1"/>
+			<surname value="Test01_b"/>
+			<email value="tbatyr@poczta.com"/>
+			<telephone value="123456789"/>
+		</personalInfo>
+
+		<employeeInfo>
+			<stdWorkTime value="480"/>
+			<maxWorkTime value="600"/>
+			<hourlyWage value="250"/>
+			<role value="employee"/>
+			<cardId value="ABCD4323"/>
+			<id value="3"/>
 		</employeeInfo>
 
 		<attendance>
