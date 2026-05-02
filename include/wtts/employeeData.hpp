@@ -11,6 +11,7 @@ std::string to_string(EmployeeRole const);
 
 class AttendanceData {
 public:
+  tu::TimePeriod const *getCurrentTimePeriod() const { return &current_; }
   tu::TimePeriod *getCurrentTimePeriod() { return &current_; }
 
   // Verify the validity of current_ and add it to attendance_

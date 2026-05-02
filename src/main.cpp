@@ -34,6 +34,12 @@ int main(int argc, char **argv) {
     a->addTimePeriod(p1);
 
     std::cout << "Calculated pay: " << e->calculatePay(p1.begin) << std::endl;
+
+    auto employees = system->getEmployeeBy([](es::Employee const *e,
+                                              es::PersonnelData const *p,
+                                              es::AttendanceData const *a) {
+      return true; // Condition for selection;
+    });
   }
 
   catch (std::exception const &e) {
