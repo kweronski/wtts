@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <set>
 #include <string>
@@ -28,6 +29,11 @@ public:
                                             std::string const &surname) const;
 
   void printData(Employee *const = 0, bool skipAttendance = false) const;
+
+	using Predicate =
+		std::function<bool(Employee const*, PersonnelData const*, AttendanceData const*)>;
+
+	std::vector<Employee*> getEmployeeBy(Predicate func);
 
 private:
   std::set<std::unique_ptr<Employee>> employees_;

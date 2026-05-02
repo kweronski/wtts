@@ -3,6 +3,25 @@
 #include <wtts/logInfo.hpp>
 
 namespace es {
+std::vector<Employee*> EmployeeSystem::getEmployeeBy(Predicate func) {
+	std::vector<Employee*> empl;
+
+  for (auto &e : employees_)
+    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+      empl.push_back(e.get());
+  for (auto &e : drivers_)
+    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+      empl.push_back(e.get());
+  for (auto &e : managers_)
+    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+      empl.push_back(e.get());
+  for (auto &e : admins_)
+    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+      empl.push_back(e.get());
+
+  return empl;
+}
+
 Employee *EmployeeSystem::getEmployeeById(std::string const &id) const {
   for (auto &e : employees_)
     if (e->getEmployeeId() == id)

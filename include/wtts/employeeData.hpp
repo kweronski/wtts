@@ -25,7 +25,7 @@ public:
   const std::list<tu::TimePeriod> &getRecords() const { return attendance_; }
 
 private:
-  tu::TimePeriod current_;
+  tu::TimePeriod current_{};
   std::list<tu::TimePeriod> attendance_;
 };
 
