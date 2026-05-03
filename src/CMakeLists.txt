@@ -16,6 +16,7 @@ add_library(employeeSystem
 	employeeSystem/factory.cpp
 	employeeSystem/employeeData.cpp
 	employeeSystem/employee.cpp
+	employeeSystem/interactiveCLI.cpp
 	logInfo.cpp)
 target_link_libraries(employeeSystem PRIVATE dataparser)
 
