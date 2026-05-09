@@ -38,6 +38,12 @@ void buildEmployeeMenu(Shell *s) {
   auto menu = s->getMenu();
   menu->clear();
 
+  menu->push_back({.description = "Check-in", .callback = [s]() {}});
+
+  menu->push_back({.description = "Check-out", .callback = [s]() {}});
+
+  menu->push_back({.description = "Print info", .callback = [s]() {}});
+
   menu->push_back({.description = "Calculate pay", .callback = [s]() {
                      auto sys = s->getSystem();
                      auto id = s->getCurrentEmployeeId();
@@ -52,14 +58,33 @@ void buildEmployeeMenu(Shell *s) {
 
   menu->push_back(
       {.description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+  s->setPromptText(emp->getEmployeeName() + " " + emp->getEmployeeSurname() +
+                   +" (" + to_string(emp->getEmployeeRole()) + ")> ");
 }
 
-void buildAdminMenu(Shell *s) {
+void buildGeneralAdminMenu(Shell *s) {
   auto menu = s->getMenu();
   menu->clear();
 
   menu->push_back(
-      {.description = "List employees", .callback = [s]() {
+      {.description = "Set employee absence", .callback = [s]() {}});
+
+  menu->push_back(
+      {.description = "Calculate employee pay", .callback = [s]() {}});
+
+  menu->push_back({.description = "Edit employee info", .callback = [s]() {}});
+
+  menu->push_back({.description = "Add employee", .callback = [s]() {}});
+
+  menu->push_back({.description = "Print payment list", .callback = [s]() {}});
+
+  menu->push_back(
+      {.description = "List checked-in employees", .callback = [s]() {}});
+
+  menu->push_back(
+      {.description = "List all employees", .callback = [s]() {
          auto sys = s->getSystem();
          auto emp =
              sys->getEmployeeBy([](Employee const *e, PersonnelData const *,
@@ -83,11 +108,28 @@ void buildAdminMenu(Shell *s) {
 
                      s->setCurrentEmployeeId(id);
                      buildEmployeeMenu(s);
-                     s->setPromptText(emp->getEmployeeName() + " " +
-                                      emp->getEmployeeSurname() + +" (" +
-                                      to_string(emp->getEmployeeRole()) +
-                                      ")> ");
                    }});
+}
+
+void buildManagerMenu(Shell *s) {
+  buildGeneralAdminMenu(s);
+  auto menu = s->getMenu();
+
+  menu->push_back(
+      {.description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  s->setPromptText("(Manager)> ");
+}
+
+void buildAdminMenu(Shell *s) {
+  buildGeneralAdminMenu(s);
+  auto menu = s->getMenu();
+
+  menu->push_back(
+      {.description = "Remove employee from system", .callback = [s]() {}});
+
+  menu->push_back(
+      {.description = "Edit system settings", .callback = [s]() {}});
 
   menu->push_back(
       {.description = "Exit", .callback = [s]() { s->requestExit(); }});
@@ -96,8 +138,8 @@ void buildAdminMenu(Shell *s) {
 }
 
 void buildMainMenu(Shell *s) {
+  buildAdminMenu(s);
   auto menu = s->getMenu();
-  menu->clear();
 
   menu->push_back(
       {.description = "Initialize system from disk", .callback = [s]() {
@@ -112,11 +154,6 @@ void buildMainMenu(Shell *s) {
            s->write(e.what(), "\n");
          }
        }});
-
-  menu->push_back(
-      {.description = "Exit", .callback = [s]() { s->requestExit(); }});
-
-  s->setPromptText("(Admin)> ");
 }
 
 std::size_t Shell::readIndex(std::string const &str) {

@@ -5,6 +5,10 @@ enum class Result {
   Success,
   EmployeeIdNotUniqueError,
   EmployeeNotFoundError,
-  EmployeeIsNullptrError
+  EmployeeIsNullptrError,
+  EmployeeAlreadyCheckedIn,
+  EmployeeNotCheckedIn,
+  DeliveryAlreadyCheckedIn,
+  DeliveryNotCheckedIn
 };
 }

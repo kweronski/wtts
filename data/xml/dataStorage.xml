@@ -37,7 +37,7 @@
 		</attendance>
 	</employee>
 
-	<employee active="false">
+	<employee active="true">
 		<personalInfo>
 			<name value="Tadeusz"/>
 			<surname value="Batyr"/>
@@ -76,19 +76,19 @@
 	</employee>
 
 
-	<employee active="false">
+	<employee active="true">
 		<personalInfo>
-			<name value="Test01_1"/>
-			<surname value="Test01_b"/>
-			<email value="tbatyr@poczta.com"/>
-			<telephone value="123456789"/>
+			<name value="Fryderyk"/>
+			<surname value="Chopin"/>
+			<email value="fch1810@poczta_wola.pl"/>
+			<telephone value="100100100"/>
 		</personalInfo>
 
 		<employeeInfo>
 			<stdWorkTime value="480"/>
 			<maxWorkTime value="600"/>
 			<hourlyWage value="250"/>
-			<role value="employee"/>
+			<role value="driver"/>
 			<cardId value="ABCD4323"/>
 			<id value="3"/>
 		</employeeInfo>

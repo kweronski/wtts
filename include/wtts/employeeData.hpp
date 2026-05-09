@@ -14,8 +14,10 @@ public:
   tu::TimePeriod const *getCurrentTimePeriod() const { return &current_; }
   tu::TimePeriod *getCurrentTimePeriod() { return &current_; }
 
-  // Verify the validity of current_ and add it to attendance_
-  Result addTimePeriod();
+  tu::TimePeriod const *getCurrentDeliveryTimePeriod() const {
+    return &currentDelivery_;
+  }
+  tu::TimePeriod *getCurrentDeliveryTimePeriod() { return &currentDelivery_; }
 
   // Low level variant; Add time period with no checks to attendance_
   Result addTimePeriod(tu::TimePeriod);
@@ -26,6 +28,7 @@ public:
   const std::list<tu::TimePeriod> &getRecords() const { return attendance_; }
 
 private:
+  tu::TimePeriod currentDelivery_{};
   tu::TimePeriod current_{};
   std::list<tu::TimePeriod> attendance_;
 };

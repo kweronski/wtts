@@ -55,12 +55,12 @@ class EmployeeSystem;
 class GeneralAdmin {
 public:
   GeneralAdmin(EmployeeSystem *sys) : system_{sys} {}
-  void updateAbsence(Employee *const);
-  void updatePayment(Employee *const);
+  void setAbsence(Employee *const);
+  void printPaymentList();
   void editEmployee(Employee *const);
-  void registerEmployee(Employee **);
-  void activateemployee(Employee *const);
-  void deactivateemployee(Employee *const);
+  void addEmployee(Employee **);
+  void activateEmployee(Employee *const);
+  void deactivateEmployee(Employee *const);
 
 protected:
   EmployeeSystem *system_;
