@@ -14,6 +14,7 @@ using ShellMenuEntry = MenuEntry<std::function<void()>>;
 
 class Shell;
 void buildMainMenu(Shell *s);
+void buildGeneralAdminMenu(Shell *s);
 void buildAdminMenu(Shell *s);
 
 class Shell {
@@ -51,7 +52,7 @@ public:
   std::string getCurrentEmployeeId() const { return currentEmployeeId_; }
 
 private:
-  std::unique_ptr<EmployeeSystem> system_;
+  std::unique_ptr<EmployeeSystem> system_{std::make_unique<EmployeeSystem>()};
   std::string currentEmployeeId_;
 
   std::istream &input_;

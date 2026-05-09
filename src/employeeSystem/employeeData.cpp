@@ -1,8 +1,6 @@
 #include <wtts/employeeData.hpp>
 
 namespace es {
-Result AttendanceData::addTimePeriod() { return Result::Success; }
-
 Result AttendanceData::addTimePeriod(tu::TimePeriod p) {
   attendance_.push_back(std::move(p));
   return Result::Success;
