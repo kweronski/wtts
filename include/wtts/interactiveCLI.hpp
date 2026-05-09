@@ -45,8 +45,14 @@ public:
 
   void setPromptText(std::string s) { prompt_ = std::move(s); }
 
+  void setCurrentEmployeeId(std::string id) {
+    currentEmployeeId_ = std::move(id);
+  }
+  std::string getCurrentEmployeeId() const { return currentEmployeeId_; }
+
 private:
   std::unique_ptr<EmployeeSystem> system_;
+  std::string currentEmployeeId_;
 
   std::istream &input_;
   std::ostream &output_;

@@ -38,6 +38,18 @@ void buildEmployeeMenu(Shell *s) {
   auto menu = s->getMenu();
   menu->clear();
 
+  menu->push_back({.description = "Calculate pay", .callback = [s]() {
+                     auto sys = s->getSystem();
+                     auto id = s->getCurrentEmployeeId();
+                     auto emp = sys->getEmployeeById(id);
+                     auto tp = tu::TimePoint{};
+                     tp.populate(); // now
+                     s->write("Current pay: ", emp->calculatePay(tp), "\n");
+                   }});
+
+  menu->push_back({.description = "Exit to admin",
+                   .callback = [s]() { buildAdminMenu(s); }});
+
   menu->push_back(
       {.description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
@@ -69,15 +81,18 @@ void buildAdminMenu(Shell *s) {
                        return;
                      }
 
+                     s->setCurrentEmployeeId(id);
                      buildEmployeeMenu(s);
                      s->setPromptText(emp->getEmployeeName() + " " +
-                                      emp->getEmployeeSurname() + "> ");
+                                      emp->getEmployeeSurname() + +" (" +
+                                      to_string(emp->getEmployeeRole()) +
+                                      ")> ");
                    }});
 
   menu->push_back(
       {.description = "Exit", .callback = [s]() { s->requestExit(); }});
 
-  s->setPromptText("(admin)> ");
+  s->setPromptText("(Admin)> ");
 }
 
 void buildMainMenu(Shell *s) {
@@ -101,7 +116,7 @@ void buildMainMenu(Shell *s) {
   menu->push_back(
       {.description = "Exit", .callback = [s]() { s->requestExit(); }});
 
-  s->setPromptText("(wtts)> ");
+  s->setPromptText("(Admin)> ");
 }
 
 std::size_t Shell::readIndex(std::string const &str) {
