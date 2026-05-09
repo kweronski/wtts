@@ -1,6 +1,21 @@
 #include <wtts/employee.hpp>
 
 namespace es {
+Result Driver::logDeliveryBegin() {
+  tu::TimePoint tp;
+  tp.populate();
+  attendance_->getCurrentTimePeriod()->begin = std::move(tp);
+  return Result::Success;
+}
+
+Result Driver::logDeliveryEnd() {
+  tu::TimePoint tp;
+  tp.populate();
+  attendance_->getCurrentTimePeriod()->end = std::move(tp);
+  attendance_->getCurrentTimePeriod()->type = tu::AttendanceType::Delivery;
+  return Result::Success;
+}
+
 Result Employee::checkIn() {
   tu::TimePoint tp;
   tp.populate();
