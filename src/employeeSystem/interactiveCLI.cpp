@@ -154,9 +154,6 @@ void buildMainMenu(Shell *s) {
            s->write(e.what(), "\n");
          }
        }});
-
-  menu->push_back(
-      {.description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
 std::size_t Shell::readIndex(std::string const &str) {
