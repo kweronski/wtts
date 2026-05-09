@@ -115,6 +115,6 @@ int main(int argc, char **argv) {
     for (auto instance : parser.getEmployeeAttendance(id))
       for (auto &&element : serialize(*instance))
         MCR_ERR_CHECK(element, file);
-    return success;
   }
+  return success;
 }
