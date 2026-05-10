@@ -216,7 +216,27 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       ShellMenuEntry{.description = "Print payment list", .callback = []() {}});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "List checked-in employees", .callback = []() {}});
+      .description = "List checked-in employees", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *a) {
+              return a->getCurrentTimePeriod()->begin.year;
+            });
+
+        std::string message = "\tChecked in employees: \n";
+        for (std::size_t i = 0; i < emp.size(); ++i) {
+          auto const employee = emp[i];
+          message += "\t" + std::to_string(i + 1) + ". " +
+                     employee->getEmployeeName() + " " +
+                     employee->getEmployeeSurname() +
+                     " ID: " + employee->getEmployeeId() + "\n";
+        }
+
+        MCR_CNF_LOG(message, s);
+      }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "List all employees", .callback = [s]() {
