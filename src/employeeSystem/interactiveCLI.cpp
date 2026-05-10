@@ -19,7 +19,7 @@
     std::lock_guard<std::mutex> lock{shell->getConsoleGuardIn()};              \
     shell->setInputInstruction(str);                                           \
     auto oldPrompt = shell->getPromptText();                                   \
-    shell->setPromptText("(Press enter)> ");                                   \
+    shell->setPromptText("\n(Press enter)> ");                                 \
     shell->readLine();                                                         \
     shell->setPromptText(oldPrompt);                                           \
     shell->setInputInstruction("");                                            \
@@ -228,25 +228,26 @@ void appendGeneralAdminMenuEntries(Shell *s) {
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Add employee", .callback = []() {}});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Print payment list", .callback = [s]() {
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Print payment list", .callback = [s]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
         auto sys = s->getSystem();
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-				
-				std::string message = "\tAll employees: \n";
+        auto emp = sys->getEmployeeBy(
+            [](Employee const *, PersonnelData const *pd,
+               AttendanceData const *) { return pd->getEmployeeActive(); });
+
+        std::string message = "\n\t\t\tPayment list,\t\tYYYY-MM \n\tNo  "
+                              "ID\t\tName\t\t\t\t\tSum[PLN]\t\tTime[hh]\n";
         for (std::size_t i = 0; i < emp.size(); ++i) {
           auto const employee = emp[i];
-          message += "\t" + std::to_string(i + 1) + ". " +
+          message += "\t" + std::to_string(i + 1) + "." + " (" +
+                     employee->getEmployeeId() + ") " + "  " +
                      employee->getEmployeeName() + " " +
-                     employee->getEmployeeSurname() +
-                     " ID: " + employee->getEmployeeId() + "\n";
+                     employee->getEmployeeSurname() + "\n";
         }
 
         MCR_CNF_LOG(message, s);
-			}});
+      }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "List checked-in employees", .callback = [s]() {

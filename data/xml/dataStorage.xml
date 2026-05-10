@@ -1,5 +1,5 @@
 <root>
-	<employee active="true">
+	<employee active="false">
 		<personalInfo>
 			<name value="Jan"/>
 			<surname value="Kowalski"/>
@@ -13,7 +13,7 @@
 			<hourlyWage value="250"/>
 			<role value="manager"/>
 			<cardId value="ABCD4321"/>
-			<id value="1"/>
+			<id value="10"/>
 		</employeeInfo>
 
 		<attendance>
@@ -51,7 +51,7 @@
 			<hourlyWage value="250"/>
 			<role value="employee"/>
 			<cardId value="ABCD4322"/>
-			<id value="2"/>
+			<id value="11"/>
 		</employeeInfo>
 
 		<attendance>
@@ -89,7 +89,83 @@
 			<hourlyWage value="250"/>
 			<role value="driver"/>
 			<cardId value="ABCD4323"/>
-			<id value="3"/>
+			<id value="12"/>
+		</employeeInfo>
+
+		<attendance>
+			<instance>
+				<type value="sick"/>
+				<begin year="2026" month="1" day="1" hour="0" minute="0"/>
+				<end year="2026" month="2" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="vacation"/>
+				<begin year="2026" month="2" day="2" hour="0" minute="0"/>
+				<end year="2026" month="3" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="work"/>
+				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
+				<end year="2026" month="4" day="2" hour="16" minute="0"/>
+			</instance>
+		</attendance>
+	</employee>
+
+	<employee active="false">
+		<personalInfo>
+			<name value="Adam"/>
+			<surname value="Małysz"/>
+			<email value="am@wisla.pl"/>
+			<telephone value="111222333"/>
+		</personalInfo>
+
+		<employeeInfo>
+			<stdWorkTime value="480"/>
+			<maxWorkTime value="600"/>
+			<hourlyWage value="250"/>
+			<role value="manager"/>
+			<cardId value="ABCD4324"/>
+			<id value="13"/>
+		</employeeInfo>
+
+		<attendance>
+			<instance>
+				<type value="sick"/>
+				<begin year="2026" month="1" day="1" hour="0" minute="0"/>
+				<end year="2026" month="2" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="vacation"/>
+				<begin year="2026" month="2" day="2" hour="0" minute="0"/>
+				<end year="2026" month="3" day="1" hour="0" minute="0"/>
+			</instance>
+
+			<instance>
+				<type value="work"/>
+				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
+				<end year="2026" month="4" day="2" hour="16" minute="0"/>
+			</instance>
+		</attendance>
+	</employee>
+
+	<employee active="true">
+		<personalInfo>
+			<name value="Gordon"/>
+			<surname value="Ramsay"/>
+			<email value="hells@kitchen.com"/>
+			<telephone value="111222333"/>
+		</personalInfo>
+
+		<employeeInfo>
+			<stdWorkTime value="480"/>
+			<maxWorkTime value="600"/>
+			<hourlyWage value="250"/>
+			<role value="manager"/>
+			<cardId value="ABCD4325"/>
+			<id value="14"/>
 		</employeeInfo>
 
 		<attendance>
