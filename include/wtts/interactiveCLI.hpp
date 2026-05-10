@@ -24,6 +24,7 @@ void buildDriverMenu(Shell *s);
 void buildEmployeeMenu(Shell *s);
 void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
+void buildSettingsMenu(Shell *s);
 
 // All menu entry appending functions do not clear the existing menu
 void appendGeneralAdminMenuEntries(Shell *s);
