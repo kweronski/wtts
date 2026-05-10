@@ -10,6 +10,28 @@ Result AttendanceData::getHoursWorkedSince(tu::TimePoint const &) const {
   return Result::Success;
 }
 
+Result AttendanceData::setAbsence(tu::TimePoint const &t) {
+  for (auto &record : attendance_)
+    if (record.begin.year == t.year && record.begin.month == t.month &&
+        record.begin.day == t.day) {
+      record.type = tu::AttendanceType::Sick;
+      return Result::Success;
+    }
+
+  attendance_.push_back(tu::TimePeriod{tu::TimePoint{.year = t.year,
+                                                     .month = t.month,
+                                                     .day = t.day,
+                                                     .hour = 0,
+                                                     .minute = 0},
+                                       tu::TimePoint{.year = t.year,
+                                                     .month = t.month,
+                                                     .day = t.day,
+                                                     .hour = 24,
+                                                     .minute = 0},
+                                       tu::AttendanceType::Sick});
+  return Result::Success;
+}
+
 bool PersonnelData::getEmployeeActive() const { return active_; }
 
 std::string PersonnelData::getEmployeeName() const { return name_; }

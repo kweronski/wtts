@@ -28,6 +28,9 @@ std::string to_string(Result const r) {
   case Result::DeliveryNotCheckedIn:
     out = "DeliveryNotCheckedIn";
     break;
+  case Result::AttendanceExtractionError:
+    out = "AttendanceExtractionError";
+    break;
   }
   return out;
 }

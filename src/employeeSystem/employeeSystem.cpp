@@ -3,6 +3,18 @@
 #include <wtts/logInfo.hpp>
 
 namespace es {
+Result EmployeeSystem::setEmployeeAbsence(Employee *e, tu::TimePoint const &t) {
+  AttendanceData *a;
+
+  try {
+    a = attendance_.at(e).get();
+  } catch (...) {
+    return Result::AttendanceExtractionError;
+  }
+
+  return a->setAbsence(t);
+}
+
 std::vector<Employee *> EmployeeSystem::getEmployeeBy(Predicate func) {
   std::vector<Employee *> empl;
 
@@ -164,7 +176,7 @@ Result EmployeeSystem::addEmployee(Driver **const e, PersonnelData **const p,
 
   auto ptr = std::make_unique<Driver>(pd.get(), ad.get());
   *e = ptr.get();
-  employees_.emplace(std::move(ptr));
+  drivers_.emplace(std::move(ptr));
 
   personnel_.emplace(*e, std::move(pd));
   attendance_.emplace(*e, std::move(ad));
@@ -186,7 +198,7 @@ Result EmployeeSystem::addEmployee(Manager **const e, PersonnelData **const p,
 
   auto ptr = std::make_unique<Manager>(pd.get(), ad.get(), this);
   *e = ptr.get();
-  employees_.emplace(std::move(ptr));
+  managers_.emplace(std::move(ptr));
 
   personnel_.emplace(*e, std::move(pd));
   attendance_.emplace(*e, std::move(ad));
@@ -208,7 +220,7 @@ Result EmployeeSystem::addEmployee(Admin **const e, PersonnelData **const p,
 
   auto ptr = std::make_unique<Admin>(pd.get(), ad.get(), this);
   *e = ptr.get();
-  employees_.emplace(std::move(ptr));
+  admins_.emplace(std::move(ptr));
 
   personnel_.emplace(*e, std::move(pd));
   attendance_.emplace(*e, std::move(ad));

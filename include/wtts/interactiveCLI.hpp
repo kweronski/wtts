@@ -24,6 +24,8 @@ void buildDriverMenu(Shell *s, bool addJmpToPrev);
 void buildEmployeeMenu(Shell *s, bool addJmpToPrev);
 void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
+void buildAbsenceEmployeeSelectionMenu(Shell *,
+                                       std::vector<Employee *> const &);
 void buildSettingsMenu(Shell *s);
 
 // All menu entry appending functions do not clear the existing menu
@@ -31,6 +33,9 @@ void appendGeneralAdminMenuEntries(Shell *s);
 void appendAdminMenuEntries(Shell *s);
 void appendEmployeeMenuEntries(Shell *s);
 void appendDriverMenuEntries(Shell *s);
+
+bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
+                 std::size_t end, Shell *s);
 
 template <typename T> struct GuardedResource {
 private:
@@ -166,6 +171,7 @@ private:
   std::mutex systemGuard_;
 
   std::string currentEmployeeId_;
+  std::string targetEmployeeId_;
 
   std::istream &input_;
   std::ostream &output_;
