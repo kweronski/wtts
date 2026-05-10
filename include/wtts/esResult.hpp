@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace es {
 enum class Result {
   Success,
@@ -11,4 +13,6 @@ enum class Result {
   DeliveryAlreadyCheckedIn,
   DeliveryNotCheckedIn
 };
+
+std::string to_string(Result const);
 }

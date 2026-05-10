@@ -22,6 +22,8 @@ void buildAdminMenu(Shell *s);
 void buildManagerMenu(Shell *s);
 void buildDriverMenu(Shell *s);
 void buildEmployeeMenu(Shell *s);
+void buildEmployeeSelectionMenu(
+    Shell *, std::vector<std::pair<std::string, Employee *>> const &);
 
 // All menu entry appending functions do not clear the existing menu
 void appendGeneralAdminMenuEntries(Shell *s);
@@ -30,6 +32,7 @@ void appendEmployeeMenuEntries(Shell *s);
 void appendDriverMenuEntries(Shell *s);
 
 template <typename T> struct GuardedResource {
+private:
   mutable std::mutex guard;
   T resource;
 
@@ -117,7 +120,7 @@ public:
   }
 
   template <typename... P> void write(P &&...args) {
-    std::lock_guard<std::mutex> lock{consoleGuard_};
+    std::lock_guard<std::mutex> lock{consoleGuardOut_};
     (output_ << ... << args) << std::flush;
   }
   void run();
@@ -140,6 +143,7 @@ public:
   void setSystem(std::unique_ptr<EmployeeSystem> s) { system_ = std::move(s); }
   EmployeeSystem *getSystem() { return system_.get(); }
   std::mutex &getSystemGuard() { return systemGuard_; }
+  std::mutex &getConsoleGuardIn() { return consoleGuardIn_; }
 
   UserInterface *getInterface() { return &ui_; }
 
@@ -157,7 +161,8 @@ private:
 
   UserInterface ui_;
 
-  std::mutex consoleGuard_;
+  std::mutex consoleGuardOut_;
+  std::mutex consoleGuardIn_;
   std::atomic<bool> exit_{0};
 };
 } // namespace es
