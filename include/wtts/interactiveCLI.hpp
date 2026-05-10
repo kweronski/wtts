@@ -18,10 +18,10 @@ using ShellMenuEntry = MenuEntry<std::function<void()>>;
 class Shell;
 // All build functions clear the existing menu
 void buildMainMenu(Shell *s);
-void buildAdminMenu(Shell *s);
-void buildManagerMenu(Shell *s);
-void buildDriverMenu(Shell *s);
-void buildEmployeeMenu(Shell *s);
+void buildAdminMenu(Shell *s, bool addJmpToPrev);
+void buildManagerMenu(Shell *s, bool addJmpToPrev);
+void buildDriverMenu(Shell *s, bool addJmpToPrev);
+void buildEmployeeMenu(Shell *s, bool addJmpToPrev);
 void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
 void buildSettingsMenu(Shell *s);
@@ -101,6 +101,13 @@ public:
   }
 };
 
+struct MenuState {
+  std::vector<ShellMenuEntry> menu;
+  std::string inputInstruction;
+  std::string prompt;
+  std::string currentEmployeeId;
+};
+
 struct UserInterface {
   GuardedResource<std::string> greeting;
   GuardedResource<std::vector<ShellMenuEntry>> menu;
@@ -151,6 +158,9 @@ public:
   void handleInput();
   void autoCheckout();
 
+  void pushMenuState();
+  void popMenuState();
+
 private:
   std::unique_ptr<EmployeeSystem> system_{std::make_unique<EmployeeSystem>()};
   std::mutex systemGuard_;
@@ -160,6 +170,7 @@ private:
   std::istream &input_;
   std::ostream &output_;
 
+  std::list<MenuState> previousMenus_;
   UserInterface ui_;
 
   std::mutex consoleGuardOut_;
