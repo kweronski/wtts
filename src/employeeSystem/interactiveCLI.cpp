@@ -78,14 +78,6 @@ void Shell::greet() {
 }
 
 std::string Shell::readLine() {
-  termios oldt, newt;
-  tcgetattr(STDIN_FILENO, &oldt);
-  newt = oldt;
-  newt.c_lflag &= ~(ICANON | ECHO);
-  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-  int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-  fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
-
   char c{};
   while ((c = getchar()) != '\n') {
     if (c == -1) // no input
@@ -97,9 +89,6 @@ std::string Shell::readLine() {
       ui_.buf.push_back(c);
   }
 
-  fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
-  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-
   if (ui_.buf.size()) {
     auto line = ui_.buf.merge<std::string>();
     ui_.buf.clear();
@@ -110,6 +99,14 @@ std::string Shell::readLine() {
 }
 
 void Shell::run() {
+  termios oldt, newt;
+  tcgetattr(STDIN_FILENO, &oldt);
+  newt = oldt;
+  newt.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+  fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+
   greet();
 
   buildMainMenu(this);
@@ -128,6 +125,9 @@ void Shell::run() {
   }}};
 
   this->handleInput();
+
+  fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 }
 
 void Shell::autoCheckout() {
@@ -152,8 +152,24 @@ void Shell::autoCheckout() {
 
 void Shell::handleInput() {
   while (!this->exit_) {
-    std::string input = this->readLine();
     std::size_t index{};
+    std::string input;
+
+    {
+      std::lock_guard<std::mutex> lock{consoleGuardIn_};
+      char c = getchar();
+      if (c == -1)
+        continue;
+      else if (c != '\n' && c != 127 && c != '\b')
+        ui_.buf.push_back(c);
+      else if ((c == '\b' || c == 127) && ui_.buf.size())
+        ui_.buf.pop_back();
+      if (c != '\n')
+        continue;
+    }
+
+    input = ui_.buf.merge<std::string>();
+    ui_.buf.clear();
 
     if (input == "exit") {
       this->requestExit(); // required to halt async thread
@@ -275,6 +291,7 @@ void appendGeneralAdminMenuEntries(Shell *s) {
                                   employee});
         }
 
+        s->pushMenuState();
         buildEmployeeSelectionMenu(s, allEmployees);
       }});
 }
@@ -287,20 +304,21 @@ void buildEmployeeSelectionMenu(
   for (auto const &e : employees) {
     s->getInterface()->menu.push_back(ShellMenuEntry{
         .description = e.first, .callback = [s, &e]() {
+          s->pushMenuState();
           s->setCurrentEmployeeId(e.second->getEmployeeId());
 
           switch (e.second->getEmployeeRole()) {
           case EmployeeRole::Employee:
-            buildEmployeeMenu(s);
+            buildEmployeeMenu(s, true);
             break;
           case EmployeeRole::Driver:
-            buildDriverMenu(s);
+            buildDriverMenu(s, true);
             break;
           case EmployeeRole::Admin:
-            buildAdminMenu(s);
+            buildAdminMenu(s, true);
             break;
           default:
-            buildManagerMenu(s);
+            buildManagerMenu(s, true);
             break;
           }
 
@@ -310,12 +328,8 @@ void buildEmployeeSelectionMenu(
         }});
   }
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Back to admin prompt", .callback = [s]() {
-                       buildAdminMenu(s);
-                       s->setPromptText("(Admin)> ");
-                       s->setCurrentEmployeeId("");
-                     }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Back", .callback = [s]() { s->popMenuState(); }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
@@ -326,8 +340,10 @@ void appendAdminMenuEntries(Shell *s) {
       .description = "Remove employee from system", .callback = []() {}});
 
   s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Edit system settings",
-                     .callback = [s]() { buildSettingsMenu(s); }});
+      ShellMenuEntry{.description = "Edit system settings", .callback = [s]() {
+                       s->pushMenuState();
+                       buildSettingsMenu(s);
+                     }});
 }
 
 void buildSettingsMenu(Shell *s) {
@@ -370,15 +386,11 @@ void buildSettingsMenu(Shell *s) {
           return;
 
         s->getSystem()->setAutoCheckoutTime(hour, minute);
-        buildAdminMenu(s);
+        s->popMenuState();
       }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Back to admin prompt", .callback = [s]() {
-                       buildAdminMenu(s);
-                       s->setPromptText("(Admin)> ");
-                       s->setCurrentEmployeeId("");
-                     }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Back", .callback = [s]() { s->popMenuState(); }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
@@ -424,43 +436,59 @@ void appendDriverMenuEntries(Shell *s) {
                      .callback = [s]() { s->requestExit(); }});
 }
 
-void buildEmployeeMenu(Shell *s) {
+void buildEmployeeMenu(Shell *s, bool addJmpToPrev) {
   s->getInterface()->menu.clear();
 
   appendEmployeeMenuEntries(s);
+
+  if (addJmpToPrev)
+    s->getInterface()->menu.push_back(ShellMenuEntry{
+        .description = "Back", .callback = [s]() { s->popMenuState(); }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
-void buildDriverMenu(Shell *s) {
+void buildDriverMenu(Shell *s, bool addJmpToPrev) {
   s->getInterface()->menu.clear();
 
   appendEmployeeMenuEntries(s);
   appendDriverMenuEntries(s);
 
+  if (addJmpToPrev)
+    s->getInterface()->menu.push_back(ShellMenuEntry{
+        .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
-void buildManagerMenu(Shell *s) {
+void buildManagerMenu(Shell *s, bool addJmpToPrev) {
   s->getInterface()->menu.clear();
 
   if (s->getCurrentEmployeeId().size())
     appendEmployeeMenuEntries(s);
   appendGeneralAdminMenuEntries(s);
 
+  if (addJmpToPrev)
+    s->getInterface()->menu.push_back(ShellMenuEntry{
+        .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
-void buildAdminMenu(Shell *s) {
+void buildAdminMenu(Shell *s, bool addJmpToPrev) {
   s->getInterface()->menu.clear();
 
   if (s->getCurrentEmployeeId().size())
     appendEmployeeMenuEntries(s);
   appendGeneralAdminMenuEntries(s);
   appendAdminMenuEntries(s);
+
+  if (addJmpToPrev)
+    s->getInterface()->menu.push_back(ShellMenuEntry{
+        .description = "Back", .callback = [s]() { s->popMenuState(); }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
@@ -482,7 +510,7 @@ void buildMainMenu(Shell *s) {
           dp::XMLDataParser parser{path};
           auto system = EmployeeSystemFactory::create(&parser);
           s->setSystem(std::move(system));
-          buildAdminMenu(s);
+          buildAdminMenu(s, false);
         } catch (std::exception const &e) {
           MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
                       s);
@@ -491,11 +519,38 @@ void buildMainMenu(Shell *s) {
           MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
           return;
         }
+
+        MCR_CNF_LOG("Success: Loaded employee system from disk.\n", s);
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
 
   s->setPromptText("(Admin)> ");
+}
+
+void Shell::pushMenuState() {
+  MenuState state{};
+  state.menu = ui_.menu.get();
+  state.currentEmployeeId = getCurrentEmployeeId();
+  state.inputInstruction = ui_.inputInstruction.get();
+  state.prompt = ui_.prompt.get();
+
+  previousMenus_.push_back(std::move(state));
+}
+
+void Shell::popMenuState() {
+  if (!previousMenus_.size())
+    throw std::runtime_error{
+        "Reverting to a previous menu state was requested, "
+        "but no previous menu exists"};
+
+  auto state = std::move(previousMenus_.back());
+  previousMenus_.pop_back();
+
+  ui_.menu.set(std::move(state.menu));
+  setCurrentEmployeeId(std::move(state.currentEmployeeId));
+  ui_.inputInstruction.set(std::move(state.inputInstruction));
+  ui_.prompt.set(std::move(state.prompt));
 }
 } // namespace es
