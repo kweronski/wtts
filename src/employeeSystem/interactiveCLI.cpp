@@ -1,176 +1,351 @@
+#include <iomanip>
+#include <thread>
 #include <wtts/employeeData.hpp>
 #include <wtts/employeeSystemFactory.hpp>
 #include <wtts/interactiveCLI.hpp>
 #include <wtts/xmlParser.hpp>
 
+// For input handling
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+
+#ifdef MCR_CNF_LOG
+#error "MCR_CNF_LOG is already defined"
+#endif
+
+#define MCR_CNF_LOG(str, shell)                                                \
+  do {                                                                         \
+    shell->setInputInstruction(str);                                           \
+    auto oldPrompt = shell->getPromptText();                                   \
+    shell->setPromptText("(Press enter)> ");                                   \
+    shell->readLine();                                                         \
+    shell->setPromptText(oldPrompt);                                           \
+    shell->setInputInstruction("");                                            \
+  } while (0);
+
+class ScopedThread {
+  std::thread t;
+
+public:
+  explicit ScopedThread(std::thread t_) : t(std::move(t_)) {}
+
+  ~ScopedThread() {
+    if (t.joinable()) {
+      t.join(); // automatically join on destruction
+    }
+  }
+
+  // non-copyable
+  ScopedThread(const ScopedThread &) = delete;
+  ScopedThread &operator=(const ScopedThread &) = delete;
+
+  // movable
+  ScopedThread(ScopedThread &&other) noexcept : t(std::move(other.t)) {}
+  ScopedThread &operator=(ScopedThread &&other) noexcept {
+    if (t.joinable())
+      t.join();
+    t = std::move(other.t);
+    return *this;
+  }
+};
+
+std::string getCurrentTime() {
+  // 1. Get current time as time_point
+  auto now = std::chrono::system_clock::now();
+
+  // 2. Convert to time_t (calendar time)
+  std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+
+  // 3. Convert to local time
+  std::tm local_tm;
+#if defined(_WIN32) || defined(_WIN64)
+  localtime_s(&local_tm, &now_c); // thread-safe on Windows
+#else
+  localtime_r(&now_c, &local_tm); // thread-safe on Linux/macOS
+#endif
+
+  // 4. Format into string
+  std::ostringstream oss;
+  oss << std::put_time(&local_tm, "%Y/%m/%d %H:%M:%S");
+  return oss.str();
+}
+
 namespace es {
+void Shell::greet() {
+  ui_.greeting.set("Welcome to WTTS (Work Time Tracking System)\n");
+}
+
+std::string Shell::readLine() {
+  termios oldt, newt;
+  tcgetattr(STDIN_FILENO, &oldt);
+  newt = oldt;
+  newt.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+  fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+
+  char c{};
+  while ((c = getchar()) != '\n') {
+    if (c == -1) // no input
+      continue;
+
+    if ((c == '\b' || c == 127) && ui_.buf.size())
+      ui_.buf.pop_back();
+    else
+      ui_.buf.push_back(c);
+  }
+
+  fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+
+  if (ui_.buf.size()) {
+    auto line = ui_.buf.merge<std::string>();
+    ui_.buf.clear();
+    return line;
+  }
+
+  return "";
+}
+
 void Shell::run() {
   greet();
 
   buildMainMenu(this);
 
-  while (prompt())
-    ;
+  ScopedThread ui{std::thread{[this]() {
+    while (!this->exit_)
+      this->renderUserInterface();
+    write("\n");
+  }}};
+
+  ScopedThread autoCheckout{std::thread{[this]() {
+    while (!this->exit_) {
+      std::this_thread::sleep_for(std::chrono::seconds{1});
+      this->autoCheckout();
+    }
+  }}};
+
+  this->handleInput();
 }
 
-bool Shell::prompt() {
-  do {
-    for (std::size_t i = 1; i <= menu_.size(); ++i)
-      output_ << i << ". " << menu_.at(i - 1).description << std::endl;
+void Shell::autoCheckout() {
+  std::lock_guard<std::mutex> lock{systemGuard_};
 
-    write(prompt_);
+  if (!system_)
+    return;
 
-    std::size_t const index = readIndex(readLine());
+  std::string message;
+
+  if (auto checkedOut = system_->autoCheckOut(); checkedOut.size()) {
+    message += "Checked out the following emploees: \n";
+
+    for (auto employee : checkedOut)
+      message += "\t" + employee->getEmployeeName() + " " +
+                 employee->getEmployeeSurname() + " " +
+                 employee->getEmployeeId() + "\n";
+
+    MCR_CNF_LOG(message, this);
+  }
+}
+
+void Shell::handleInput() {
+  while (!this->exit_) {
+    std::string input = this->readLine();
+    std::size_t index{};
+
+    if (input == "exit") {
+      this->requestExit(); // required to halt async thread
+      break;
+    }
+
+    ui_.greeting.clear();
 
     try {
-      if (index)
-        menu_.at(index - 1).callback();
+      index = std::stoul(input);
     } catch (...) {
+      MCR_CNF_LOG("'" + input + "' is not a valid number\n", this);
       continue;
     }
 
-  } while (!exit_);
+    if (!index) {
+      MCR_CNF_LOG("'" + input + "' is not a valid index\n", this);
+      continue;
+    }
 
-  return false;
+    auto entry = ui_.menu.at<std::size_t>(index - 1);
+    entry.callback();
+  }
 }
 
-void buildEmployeeMenu(Shell *s) {
-  auto menu = s->getMenu();
-  menu->clear();
+void Shell::renderUserInterface() {
+  auto const now = std::chrono::system_clock::now();
+  if (now - ui_.lastRefresh.get() < ui_.tick.get())
+    return;
+  ui_.lastRefresh.set(now);
 
-  menu->push_back({.description = "Check-in", .callback = [s]() {}});
+  write("\033[2J\033[H"); // Clear screen: works on ANSI terminals
+  write(ui_.greeting.get());
 
-  menu->push_back({.description = "Check-out", .callback = [s]() {}});
+  ui_.date.set(getCurrentTime());
+  write("(WTTS) ", ui_.date.get(), "\n");
 
-  menu->push_back({.description = "Print info", .callback = [s]() {}});
+  for (std::size_t i = 1; i <= ui_.menu.size(); ++i)
+    write(i, ". ", ui_.menu.at(i - 1).description, "\n");
 
-  menu->push_back({.description = "Calculate pay", .callback = [s]() {
-                     auto sys = s->getSystem();
-                     auto id = s->getCurrentEmployeeId();
-                     auto emp = sys->getEmployeeById(id);
-                     auto tp = tu::TimePoint{};
-                     tp.populate(); // now
-                     s->write("Current pay: ", emp->calculatePay(tp), "\n");
-                   }});
+  write(ui_.inputInstruction.get());
+  write(ui_.prompt.get());
+  write(ui_.buf.merge<std::string>());
+}
 
-  menu->push_back({.description = "Exit to admin",
-                   .callback = [s]() { buildAdminMenu(s); }});
+void appendGeneralAdminMenuEntries(Shell *s) {
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Set employee absence", .callback = []() {}});
 
-  menu->push_back(
-      {.description = "Exit", .callback = [s]() { s->requestExit(); }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Calculate employee pay", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Edit employee info", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Add employee", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Print payment list", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "List checked-in employees", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "List all employees", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+      }});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Select employee", .callback = [s]() {
+                       std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+                     }});
+}
+
+void appendAdminMenuEntries(Shell *s) {
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Remove employee from system", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Edit system settings", .callback = []() {}});
+}
+
+void appendEmployeeMenuEntries(Shell *s) {
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Check-in", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Check-out", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Print info", .callback = []() {}});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Calculate pay", .callback = [s]() {
+                       // auto sys = s->getSystem();
+                       auto id = s->getCurrentEmployeeId();
+                       // auto emp = sys->getEmployeeById(id);
+                       auto tp = tu::TimePoint{};
+                       tp.populate(); // now
+                     }});
 
   auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
   s->setPromptText(emp->getEmployeeName() + " " + emp->getEmployeeSurname() +
                    +" (" + to_string(emp->getEmployeeRole()) + ")> ");
 }
 
-void buildGeneralAdminMenu(Shell *s) {
-  auto menu = s->getMenu();
-  menu->clear();
+void appendDriverMenuEntries(Shell *s) {
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Log beginning of delivery",
+                     .callback = [s]() { s->requestExit(); }});
 
-  menu->push_back(
-      {.description = "Set employee absence", .callback = [s]() {}});
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Log end of delivery",
+                     .callback = [s]() { s->requestExit(); }});
+}
 
-  menu->push_back(
-      {.description = "Calculate employee pay", .callback = [s]() {}});
+void buildEmployeeMenu(Shell *s) {
+  s->getInterface()->menu.clear();
 
-  menu->push_back({.description = "Edit employee info", .callback = [s]() {}});
+  appendEmployeeMenuEntries(s);
 
-  menu->push_back({.description = "Add employee", .callback = [s]() {}});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+}
 
-  menu->push_back({.description = "Print payment list", .callback = [s]() {}});
+void buildDriverMenu(Shell *s) {
+  s->getInterface()->menu.clear();
 
-  menu->push_back(
-      {.description = "List checked-in employees", .callback = [s]() {}});
+  appendEmployeeMenuEntries(s);
+  appendDriverMenuEntries(s);
 
-  menu->push_back(
-      {.description = "List all employees", .callback = [s]() {
-         auto sys = s->getSystem();
-         auto emp =
-             sys->getEmployeeBy([](Employee const *e, PersonnelData const *,
-                                   AttendanceData const *) { return true; });
-
-         for (auto e : emp)
-           s->write(e->getEmployeeName(), " ", e->getEmployeeSurname(), " ",
-                    e->getEmployeeId(), "\n");
-       }});
-
-  menu->push_back({.description = "Select employee", .callback = [s]() {
-                     auto const sys = s->getSystem();
-                     s->write("Enter employee ID: ");
-                     auto const id = s->readLine();
-                     auto const emp = sys->getEmployeeById(id);
-
-                     if (!emp) {
-                       s->write("Did not find employee with id: ", id, "\n");
-                       return;
-                     }
-
-                     s->setCurrentEmployeeId(id);
-                     buildEmployeeMenu(s);
-                   }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
 void buildManagerMenu(Shell *s) {
-  buildGeneralAdminMenu(s);
-  auto menu = s->getMenu();
+  s->getInterface()->menu.clear();
 
-  menu->push_back(
-      {.description = "Exit", .callback = [s]() { s->requestExit(); }});
+  appendGeneralAdminMenuEntries(s);
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
 
   s->setPromptText("(Manager)> ");
 }
 
 void buildAdminMenu(Shell *s) {
-  buildGeneralAdminMenu(s);
-  auto menu = s->getMenu();
+  s->getInterface()->menu.clear();
 
-  menu->push_back(
-      {.description = "Remove employee from system", .callback = [s]() {}});
+  appendGeneralAdminMenuEntries(s);
+  appendAdminMenuEntries(s);
 
-  menu->push_back(
-      {.description = "Edit system settings", .callback = [s]() {}});
-
-  menu->push_back(
-      {.description = "Exit", .callback = [s]() { s->requestExit(); }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
 
   s->setPromptText("(Admin)> ");
 }
 
 void buildMainMenu(Shell *s) {
-  buildAdminMenu(s);
-  auto menu = s->getMenu();
+  s->getInterface()->menu.clear();
 
-  menu->push_back(
-      {.description = "Initialize system from disk", .callback = [s]() {
-         s->write("Enter path to file: ");
-         auto path = s->readLine();
-         auto parser = std::make_unique<dp::XMLDataParser>(path);
-         try {
-           auto system = EmployeeSystemFactory::create(parser.get());
-           s->setSystem(std::move(system));
-           buildAdminMenu(s);
-         } catch (std::exception const &e) {
-           s->write(e.what(), "\n");
-         }
-       }});
-}
+  appendGeneralAdminMenuEntries(s);
+  appendAdminMenuEntries(s);
 
-std::size_t Shell::readIndex(std::string const &str) {
-  try {
-    return std::stoul(str);
-  } catch (...) {
-    return 0;
-  }
-}
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Initialize system from disk", .callback = [s]() {
+        s->setInputInstruction("Enter path to data storage: \n");
+        auto path = s->readLine();
+        s->setInputInstruction("");
 
-std::string Shell::readLine() {
-  std::string line;
-  std::getline(input_, line);
-  return line;
-}
+        try {
+          dp::XMLDataParser parser{path};
+          auto system = EmployeeSystemFactory::create(&parser);
+          s->setSystem(std::move(system));
+          buildAdminMenu(s);
+        } catch (std::exception const &e) {
+          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
+                      s);
+          return;
+        } catch (...) {
+          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
+          return;
+        }
+      }});
 
-void Shell::greet() {
-  write("Welcome to WTTS (Work Time Tracking System)", "\n");
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  s->setPromptText("(Admin)> ");
 }
 } // namespace es

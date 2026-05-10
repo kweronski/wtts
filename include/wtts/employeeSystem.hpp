@@ -21,7 +21,18 @@ public:
                      AttendanceData **const);
   Result addEmployee(Admin **const, PersonnelData **const,
                      AttendanceData **const);
-  Result autoCheckOut();
+
+  void setAutoCheckoutTime(unsigned hour, unsigned minute) {
+    autoCheckoutHour_ = hour;
+    autoCheckoutMinute_ = minute;
+  }
+
+  std::pair<unsigned, unsigned> getAutoCheckoutTime() const {
+    return {autoCheckoutHour_, autoCheckoutMinute_};
+  }
+
+  // Checks out all employees that are checked in past the auto checkout time
+  std::vector<Employee *> autoCheckOut();
 
   Employee *getEmployeeById(std::string const &id) const;
 
@@ -43,5 +54,7 @@ private:
 
   std::unordered_map<Employee *, std::unique_ptr<AttendanceData>> attendance_;
   std::unordered_map<Employee *, std::unique_ptr<PersonnelData>> personnel_;
+
+  unsigned autoCheckoutHour_, autoCheckoutMinute_;
 };
 } // namespace es

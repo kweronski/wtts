@@ -1,6 +1,6 @@
 #include <wtts/interactiveCLI.hpp>
 
-int main(int argc, char **argv) {
+int main(int, char **) {
   try {
     es::Shell shell{std::cin, std::cout};
     shell.run();
