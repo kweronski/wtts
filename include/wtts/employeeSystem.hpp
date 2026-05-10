@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include <wtts/employee.hpp>
+#include <wtts/paymentList.hpp>
 
 namespace es {
 class EmployeeSystem {
@@ -41,10 +42,13 @@ public:
 
   void printData(Employee *const = 0, bool skipAttendance = false) const;
 
-	using Predicate =
-		std::function<bool(Employee const*, PersonnelData const*, AttendanceData const*)>;
+  using Predicate = std::function<bool(Employee const *, PersonnelData const *,
+                                       AttendanceData const *)>;
 
-	std::vector<Employee*> getEmployeeBy(Predicate func);
+  std::vector<Employee *> getEmployeeBy(Predicate func);
+
+  std::vector<PaymentRecord> createPaymentList(tu::TimePeriod const &tp,
+                                               Predicate func);
 
 private:
   std::set<std::unique_ptr<Employee>> employees_;
