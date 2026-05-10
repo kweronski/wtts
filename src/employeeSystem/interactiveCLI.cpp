@@ -16,6 +16,7 @@
 
 #define MCR_CNF_LOG(str, shell)                                                \
   do {                                                                         \
+    std::lock_guard<std::mutex> lock{shell->getConsoleGuardIn()};              \
     shell->setInputInstruction(str);                                           \
     auto oldPrompt = shell->getPromptText();                                   \
     shell->setPromptText("(Press enter)> ");                                   \
@@ -224,25 +225,106 @@ void appendGeneralAdminMenuEntries(Shell *s) {
         auto emp =
             sys->getEmployeeBy([](Employee const *, PersonnelData const *,
                                   AttendanceData const *) { return true; });
+
+        std::string message = "\tAll employees: \n";
+        for (std::size_t i = 0; i < emp.size(); ++i) {
+          auto const employee = emp[i];
+          message += "\t" + std::to_string(i + 1) + ". " +
+                     employee->getEmployeeName() + " " +
+                     employee->getEmployeeSurname() +
+                     " ID: " + employee->getEmployeeId() + "\n";
+        }
+
+        MCR_CNF_LOG(message, s);
       }});
 
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Select employee", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+
+        std::vector<std::pair<std::string, Employee *>> allEmployees;
+        for (std::size_t i = 0; i < emp.size(); ++i) {
+          auto employee = emp[i];
+          allEmployees.push_back({employee->getEmployeeName() + " " +
+                                      employee->getEmployeeSurname() + " " +
+                                      employee->getEmployeeId(),
+                                  employee});
+        }
+
+        buildEmployeeSelectionMenu(s, allEmployees);
+      }});
+}
+
+void buildEmployeeSelectionMenu(
+    Shell *s,
+    std::vector<std::pair<std::string, Employee *>> const &employees) {
+  s->getInterface()->menu.clear();
+
+  for (auto const &e : employees) {
+    s->getInterface()->menu.push_back(ShellMenuEntry{
+        .description = e.first, .callback = [s, &e]() {
+          s->setCurrentEmployeeId(e.second->getEmployeeId());
+
+          switch (e.second->getEmployeeRole()) {
+          case EmployeeRole::Employee:
+            buildEmployeeMenu(s);
+            break;
+          case EmployeeRole::Driver:
+            buildDriverMenu(s);
+            break;
+          case EmployeeRole::Admin:
+            buildAdminMenu(s);
+            break;
+          default:
+            buildManagerMenu(s);
+            break;
+          }
+
+          s->setPromptText(e.second->getEmployeeName() + " " +
+                           e.second->getEmployeeSurname() + +" (" +
+                           to_string(e.second->getEmployeeRole()) + ")> ");
+        }});
+  }
+
   s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Select employee", .callback = [s]() {
-                       std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+      ShellMenuEntry{.description = "Back to admin prompt", .callback = [s]() {
+                       buildAdminMenu(s);
+                       s->setPromptText("(Admin)> ");
+                       s->setCurrentEmployeeId("");
                      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
 void appendAdminMenuEntries(Shell *s) {
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Remove employee from system", .callback = []() {}});
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Edit system settings", .callback = []() {}});
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Edit system settings", .callback = [s]() {
+                       std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+                       std::string message = "Set auto checkout time\n";
+                     }});
 }
 
 void appendEmployeeMenuEntries(Shell *s) {
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Check-in", .callback = []() {}});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Check-in", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+        if (auto result = emp->checkIn(); result != Result::Success) {
+          MCR_CNF_LOG("Could not check in; Reason: " + to_string(result) + "\n",
+                      s);
+          return;
+        }
+
+        MCR_CNF_LOG("Successfully checked in\n", s);
+      }});
 
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Check-out", .callback = []() {}});
@@ -258,10 +340,6 @@ void appendEmployeeMenuEntries(Shell *s) {
                        auto tp = tu::TimePoint{};
                        tp.populate(); // now
                      }});
-
-  auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-  s->setPromptText(emp->getEmployeeName() + " " + emp->getEmployeeSurname() +
-                   +" (" + to_string(emp->getEmployeeRole()) + ")> ");
 }
 
 void appendDriverMenuEntries(Shell *s) {
@@ -296,24 +374,24 @@ void buildDriverMenu(Shell *s) {
 void buildManagerMenu(Shell *s) {
   s->getInterface()->menu.clear();
 
+  if (s->getCurrentEmployeeId().size())
+    appendEmployeeMenuEntries(s);
   appendGeneralAdminMenuEntries(s);
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
-
-  s->setPromptText("(Manager)> ");
 }
 
 void buildAdminMenu(Shell *s) {
   s->getInterface()->menu.clear();
 
+  if (s->getCurrentEmployeeId().size())
+    appendEmployeeMenuEntries(s);
   appendGeneralAdminMenuEntries(s);
   appendAdminMenuEntries(s);
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
-
-  s->setPromptText("(Admin)> ");
 }
 
 void buildMainMenu(Shell *s) {
