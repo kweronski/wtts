@@ -306,10 +306,62 @@ void appendAdminMenuEntries(Shell *s) {
       .description = "Remove employee from system", .callback = []() {}});
 
   s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Edit system settings", .callback = [s]() {
-                       std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-                       std::string message = "Set auto checkout time\n";
+      ShellMenuEntry{.description = "Edit system settings",
+                     .callback = [s]() { buildSettingsMenu(s); }});
+}
+
+void buildSettingsMenu(Shell *s) {
+  s->getInterface()->menu.clear();
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Set auto checkout time", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+
+        auto readIndex = [s](std::string const &prompt, std::size_t *idx,
+                             std::size_t begin, std::size_t end) {
+          s->setInputInstruction(prompt);
+          auto value = s->readLine();
+          s->setInputInstruction("");
+
+          std::size_t index{};
+          try {
+            index = std::stoul(value);
+          } catch (...) {
+            MCR_CNF_LOG("'" + value + "' is not a valid value\n", s);
+            return false;
+          }
+
+          if (index < begin || index >= end) {
+            MCR_CNF_LOG("'" + value + "' is not within the required range: (" +
+                            std::to_string(begin) + ", " + std::to_string(end) +
+                            ")\n",
+                        s);
+            return false;
+          }
+
+          *idx = index;
+          return true;
+        };
+
+        std::size_t hour, minute;
+        if (!readIndex("Enter auto checkout hour: \n", &hour, 0, 25))
+          return;
+        if (!readIndex("Enter auto checkout minute: \n", &minute, 0, 61))
+          return;
+
+        s->getSystem()->setAutoCheckoutTime(hour, minute);
+        buildAdminMenu(s);
+      }});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Back to admin prompt", .callback = [s]() {
+                       buildAdminMenu(s);
+                       s->setPromptText("(Admin)> ");
+                       s->setCurrentEmployeeId("");
                      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
 void appendEmployeeMenuEntries(Shell *s) {
