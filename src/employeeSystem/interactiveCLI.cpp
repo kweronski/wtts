@@ -217,7 +217,17 @@ void Shell::renderUserInterface() {
 
 void appendGeneralAdminMenuEntries(Shell *s) {
   s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Set employee absence", .callback = []() {}});
+      .description = "Set employee absence", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+
+        s->pushMenuState();
+        buildAbsenceEmployeeSelectionMenu(s, emp);
+      }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Calculate employee pay", .callback = []() {}});
@@ -314,6 +324,59 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       }});
 }
 
+void buildAbsenceEmployeeSelectionMenu(
+    Shell *s, std::vector<Employee *> const &employees) {
+  s->getInterface()->menu.clear();
+
+  for (auto e : employees) {
+    s->getInterface()->menu.push_back(ShellMenuEntry{
+        .description = e->getEmployeeName() + " " + e->getEmployeeSurname() +
+                       " ID: " + e->getEmployeeId(),
+        .callback = [s, e]() {
+          std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+          auto sys = s->getSystem();
+
+          std::size_t year, month, day;
+          tu::TimePoint tp;
+          tp.populate();
+
+          if (!readBounded("Enter absence year: \n", &year, tp.year,
+                           tp.year + 1, s)) {
+            s->popMenuState();
+            return;
+          }
+          if (!readBounded("Enter absence month: \n", &month, 1, 13, s)) {
+            s->popMenuState();
+            return;
+          }
+          if (!readBounded("Enter absence day: \n", &day, 1, 32, s)) {
+            s->popMenuState();
+            return;
+          }
+
+          if (auto result = sys->setEmployeeAbsence(
+                  e, tu::TimePoint{.year = unsigned(year),
+                                   .month = unsigned(month),
+                                   .day = unsigned(day),
+                                   .hour = 0,
+                                   .minute = 0});
+              result != Result::Success) {
+            MCR_CNF_LOG(
+                "Error: Failed to set absence: " + to_string(result) + "\n", s);
+          } else
+            MCR_CNF_LOG("Successfully set absence data\n", s);
+
+          s->popMenuState();
+        }});
+  }
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+}
+
 void buildEmployeeSelectionMenu(
     Shell *s,
     std::vector<std::pair<std::string, Employee *>> const &employees) {
@@ -364,6 +427,31 @@ void appendAdminMenuEntries(Shell *s) {
                      }});
 }
 
+bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
+                 std::size_t end, Shell *s) {
+  s->setInputInstruction(prompt);
+  auto value = s->readLine();
+  s->setInputInstruction("");
+
+  std::size_t index{};
+  try {
+    index = std::stoul(value);
+  } catch (...) {
+    MCR_CNF_LOG("'" + value + "' is not a valid value\n", s);
+    return false;
+  }
+
+  if (index < begin || index >= end) {
+    MCR_CNF_LOG("'" + value + "' is not within the required range: (" +
+                    std::to_string(begin) + ", " + std::to_string(end) + ")\n",
+                s);
+    return false;
+  }
+
+  *idx = index;
+  return true;
+}
+
 void buildSettingsMenu(Shell *s) {
   s->getInterface()->menu.clear();
 
@@ -371,36 +459,10 @@ void buildSettingsMenu(Shell *s) {
       .description = "Set auto checkout time", .callback = [s]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
 
-        auto readIndex = [s](std::string const &prompt, std::size_t *idx,
-                             std::size_t begin, std::size_t end) {
-          s->setInputInstruction(prompt);
-          auto value = s->readLine();
-          s->setInputInstruction("");
-
-          std::size_t index{};
-          try {
-            index = std::stoul(value);
-          } catch (...) {
-            MCR_CNF_LOG("'" + value + "' is not a valid value\n", s);
-            return false;
-          }
-
-          if (index < begin || index >= end) {
-            MCR_CNF_LOG("'" + value + "' is not within the required range: (" +
-                            std::to_string(begin) + ", " + std::to_string(end) +
-                            ")\n",
-                        s);
-            return false;
-          }
-
-          *idx = index;
-          return true;
-        };
-
         std::size_t hour, minute;
-        if (!readIndex("Enter auto checkout hour: \n", &hour, 0, 25))
+        if (!readBounded("Enter auto checkout hour: \n", &hour, 0, 25, s))
           return;
-        if (!readIndex("Enter auto checkout minute: \n", &minute, 0, 61))
+        if (!readBounded("Enter auto checkout minute: \n", &minute, 0, 61, s))
           return;
 
         s->getSystem()->setAutoCheckoutTime(hour, minute);
