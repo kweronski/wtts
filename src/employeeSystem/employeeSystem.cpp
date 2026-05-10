@@ -3,20 +3,24 @@
 #include <wtts/logInfo.hpp>
 
 namespace es {
-std::vector<Employee*> EmployeeSystem::getEmployeeBy(Predicate func) {
-	std::vector<Employee*> empl;
+std::vector<Employee *> EmployeeSystem::getEmployeeBy(Predicate func) {
+  std::vector<Employee *> empl;
 
   for (auto &e : employees_)
-    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+    if (func(e.get(), personnel_.at(e.get()).get(),
+             attendance_.at(e.get()).get()))
       empl.push_back(e.get());
   for (auto &e : drivers_)
-    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+    if (func(e.get(), personnel_.at(e.get()).get(),
+             attendance_.at(e.get()).get()))
       empl.push_back(e.get());
   for (auto &e : managers_)
-    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+    if (func(e.get(), personnel_.at(e.get()).get(),
+             attendance_.at(e.get()).get()))
       empl.push_back(e.get());
   for (auto &e : admins_)
-    if (func(e.get(), personnel_.at(e.get()).get(), attendance_.at(e.get()).get()))
+    if (func(e.get(), personnel_.at(e.get()).get(),
+             attendance_.at(e.get()).get()))
       empl.push_back(e.get());
 
   return empl;
@@ -216,15 +220,30 @@ Result EmployeeSystem::addEmployee(Admin **const e, PersonnelData **const p,
   return Result::Success;
 }
 
-Result EmployeeSystem::autoCheckOut() {
+std::vector<Employee *> EmployeeSystem::autoCheckOut() {
+  std::vector<Employee *> checkedOut;
+  tu::TimePoint now;
+  now.populate();
+
+  auto const targetMinutes = autoCheckoutHour_ * 60 + autoCheckoutMinute_;
+  auto const nowMinutes = now.hour * 60 + now.minute;
+
+  if (nowMinutes < targetMinutes)
+    return {};
+
   for (auto &e : employees_)
-    e->checkOut();
+    if (e->checkOut() == Result::Success)
+      checkedOut.push_back(e.get());
   for (auto &e : drivers_)
-    e->checkOut();
+    if (e->checkOut() == Result::Success)
+      checkedOut.push_back(e.get());
   for (auto &e : managers_)
-    e->checkOut();
+    if (e->checkOut() == Result::Success)
+      checkedOut.push_back(e.get());
   for (auto &e : admins_)
-    e->checkOut();
-  return Result::Success;
+    if (e->checkOut() == Result::Success)
+      checkedOut.push_back(e.get());
+
+  return checkedOut;
 }
 } // namespace es

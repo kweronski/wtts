@@ -10,15 +10,15 @@
 #include <termios.h>
 #include <unistd.h>
 
-#ifdef MCR_BLK_ERR
-#error "MCR_BLK_ERR is already defined"
+#ifdef MCR_CNF_LOG
+#error "MCR_CNF_LOG is already defined"
 #endif
 
-#define MCR_BLK_ERR(str, shell)                                                \
+#define MCR_CNF_LOG(str, shell)                                                \
   do {                                                                         \
     shell->setInputInstruction(str);                                           \
     auto oldPrompt = shell->getPromptText();                                   \
-    shell->setPromptText("(Press enter to acknowledge)> ");                    \
+    shell->setPromptText("(Press enter)> ");                                   \
     shell->readLine();                                                         \
     shell->setPromptText(oldPrompt);                                           \
     shell->setInputInstruction("");                                            \
@@ -119,26 +119,57 @@ void Shell::run() {
     write("\n");
   }}};
 
-  std::string input;
+  ScopedThread autoCheckout{std::thread{[this]() {
+    while (!this->exit_) {
+      std::this_thread::sleep_for(std::chrono::seconds{1});
+      this->autoCheckout();
+    }
+  }}};
+
+  this->handleInput();
+}
+
+void Shell::autoCheckout() {
+  std::lock_guard<std::mutex> lock{systemGuard_};
+
+  if (!system_)
+    return;
+
+  std::string message;
+
+  if (auto checkedOut = system_->autoCheckOut(); checkedOut.size()) {
+    message += "Checked out the following emploees: \n";
+
+    for (auto employee : checkedOut)
+      message += "\t" + employee->getEmployeeName() + " " +
+                 employee->getEmployeeSurname() + " " +
+                 employee->getEmployeeId() + "\n";
+
+    MCR_CNF_LOG(message, this);
+  }
+}
+
+void Shell::handleInput() {
   while (!this->exit_) {
-    input = this->readLine();
+    std::string input = this->readLine();
+    std::size_t index{};
+
     if (input == "exit") {
       this->requestExit(); // required to halt async thread
       break;
     }
 
-    std::size_t index{};
     ui_.greeting.clear();
 
     try {
       index = std::stoul(input);
     } catch (...) {
-      MCR_BLK_ERR("'" + input + "' is not a valid number\n", this);
+      MCR_CNF_LOG("'" + input + "' is not a valid number\n", this);
       continue;
     }
 
     if (!index) {
-      MCR_BLK_ERR("'" + input + "' is not a valid index\n", this);
+      MCR_CNF_LOG("'" + input + "' is not a valid index\n", this);
       continue;
     }
 
@@ -188,6 +219,7 @@ void appendGeneralAdminMenuEntries(Shell *s) {
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "List all employees", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
         auto sys = s->getSystem();
         auto emp =
             sys->getEmployeeBy([](Employee const *, PersonnelData const *,
@@ -195,7 +227,9 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       }});
 
   s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Select employee", .callback = []() {}});
+      ShellMenuEntry{.description = "Select employee", .callback = [s]() {
+                       std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+                     }});
 }
 
 void appendAdminMenuEntries(Shell *s) {
@@ -294,22 +328,17 @@ void buildMainMenu(Shell *s) {
         auto path = s->readLine();
         s->setInputInstruction("");
 
-        dp::XMLDataParser parser{path};
-        if (auto result = parser.loadData(); result != dp::Result::Success) {
-          MCR_BLK_ERR("Error: " + dp::to_string(result) + "\n", s);
-          return;
-        }
-
         try {
+          dp::XMLDataParser parser{path};
           auto system = EmployeeSystemFactory::create(&parser);
           s->setSystem(std::move(system));
           buildAdminMenu(s);
-          if (!system) {
-            MCR_BLK_ERR("Error: Failed to create employee system\n", s);
-            return;
-          }
+        } catch (std::exception const &e) {
+          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
+                      s);
+          return;
         } catch (...) {
-          MCR_BLK_ERR("Error: Failed to create employee system\n", s);
+          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
           return;
         }
       }});

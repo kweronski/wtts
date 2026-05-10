@@ -139,11 +139,17 @@ public:
 
   void setSystem(std::unique_ptr<EmployeeSystem> s) { system_ = std::move(s); }
   EmployeeSystem *getSystem() { return system_.get(); }
+  std::mutex &getSystemGuard() { return systemGuard_; }
 
   UserInterface *getInterface() { return &ui_; }
 
+  void handleInput();
+  void autoCheckout();
+
 private:
   std::unique_ptr<EmployeeSystem> system_{std::make_unique<EmployeeSystem>()};
+  std::mutex systemGuard_;
+
   std::string currentEmployeeId_;
 
   std::istream &input_;
