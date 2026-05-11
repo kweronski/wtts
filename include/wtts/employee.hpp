@@ -56,7 +56,7 @@ class GeneralAdmin {
 public:
   GeneralAdmin(EmployeeSystem *sys) : system_{sys} {}
   void setAbsence(Employee *const);
-  void printPaymentList();
+  // void printPaymentList();
   void editEmployee(Employee *const);
   void addEmployee(Employee **);
   void activateEmployee(Employee *const);

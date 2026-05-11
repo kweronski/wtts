@@ -26,6 +26,7 @@ void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
 void buildAbsenceEmployeeSelectionMenu(Shell *,
                                        std::vector<Employee *> const &);
+void buildPaymentListMenu(Shell *, std::vector<Employee *> const &);
 void buildSettingsMenu(Shell *s);
 
 // All menu entry appending functions do not clear the existing menu

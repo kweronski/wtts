@@ -1,6 +1,7 @@
 #include <iomanip>
 #include <thread>
 #include <wtts/employeeData.hpp>
+#include <wtts/employeeSystem.hpp>
 #include <wtts/employeeSystemFactory.hpp>
 #include <wtts/interactiveCLI.hpp>
 #include <wtts/xmlParser.hpp>
@@ -242,21 +243,20 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       .description = "Print payment list", .callback = [s]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
         auto sys = s->getSystem();
-        auto emp = sys->getEmployeeBy(
-            [](Employee const *, PersonnelData const *pd,
-               AttendanceData const *) { return pd->getEmployeeActive(); });
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *pd,
+                                  AttendanceData const *ad) {
+              if (pd->getEmployeeActive()) {
+                for (auto ad_i : ad->getRecords()) {
+                  if (to_string(ad_i.type) == "Work")
+                    return true;
+                }
+              }
+              return false;
+            });
 
-        std::string message = "\n\t\t\tPayment list,\t\tYYYY-MM \n\tNo  "
-                              "ID\t\tName\t\t\t\t\tSum[PLN]\t\tTime[hh]\n";
-        for (std::size_t i = 0; i < emp.size(); ++i) {
-          auto const employee = emp[i];
-          message += "\t" + std::to_string(i + 1) + "." + " (" +
-                     employee->getEmployeeId() + ") " + "  " +
-                     employee->getEmployeeName() + " " +
-                     employee->getEmployeeSurname() + "\n";
-        }
-
-        MCR_CNF_LOG(message, s);
+        s->pushMenuState();
+        buildPaymentListMenu(s, emp);
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
@@ -322,6 +322,96 @@ void appendGeneralAdminMenuEntries(Shell *s) {
         s->pushMenuState();
         buildEmployeeSelectionMenu(s, allEmployees);
       }});
+}
+
+unsigned int daysInMonth(unsigned int const year, unsigned int const month) {
+  switch (month) {
+  case 1:
+  case 3:
+  case 5:
+  case 7:
+  case 8:
+  case 10:
+  case 12:
+    return 31;
+
+  case 4:
+  case 6:
+  case 9:
+  case 11:
+    return 30;
+
+  case 2: {
+    bool leapYear = (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0));
+
+    return leapYear ? 29 : 28;
+  }
+
+  default:
+    return -1; // invalid month
+  }
+}
+
+void buildPaymentListMenu(Shell *s, std::vector<Employee *> const &emp) {
+  s->getInterface()->menu.clear();
+
+  std::size_t year, month;
+  tu::TimePoint tPt;
+  tu::TimePeriod tPd;
+  tPt.populate();
+
+  if (!readBounded("Enter period year: \n", &year, tPt.year, tPt.year + 1, s)) {
+    s->popMenuState();
+    return;
+  }
+  if (!readBounded("Enter period month: \n", &month, 1, 13, s)) {
+    s->popMenuState();
+    return;
+  }
+  tPd.begin = {.year = (unsigned int)year,
+               .month = (unsigned int)month,
+               .day = (unsigned int)1,
+               .hour = (unsigned int)0,
+               .minute = (unsigned int)0};
+
+  tPd.end = {
+      .year = (unsigned int)year,
+      .month = (unsigned int)month,
+      .day = (unsigned int)daysInMonth((unsigned int)year, (unsigned int)month),
+      .hour = (unsigned int)23,
+      .minute = (unsigned int)59};
+
+  std::string message = "\n\t\t\tPayment list,\t\t" + std::to_string(year) +
+                        "-" + std::format("{:02}", month) +
+                        " \n\tNo  "
+                        "ID\t\tName\t\t\t\t\tSum[PLN]\t\tTime[hh]\n";
+
+  for (std::size_t i = 0; i < emp.size(); ++i) {
+    auto const employee = emp[i];
+
+    //    auto attendance = attendance_.at(employee).get();
+    //  printEmployeeData(p, attendance);
+    //   for (auto ad_i : employee->attendance_.begin {
+    //   auto emp =
+    //     sys->getEmployeeBy([](Employee const *, PersonnelData const *pd,
+    //                         AttendanceData const *ad) {
+    //   if (pd->getEmployeeActive()) {
+    //   for (auto ad_i : ad->getRecords()) {
+    //   if (to_string(ad_i.type) == "Work")
+    //   return true;
+    // }
+    //   }
+    // });
+    // }
+    message += "\t" + std::to_string(i + 1) + "." + " (" +
+               employee->getEmployeeId() + ") " + "  " +
+               employee->getEmployeeName() + " " +
+               employee->getEmployeeSurname() + "\n";
+  }
+
+  MCR_CNF_LOG(message, s);
+
+  s->popMenuState();
 }
 
 void buildAbsenceEmployeeSelectionMenu(
