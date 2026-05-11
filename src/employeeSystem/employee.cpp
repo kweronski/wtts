@@ -1,6 +1,35 @@
 #include <wtts/employee.hpp>
+#include <wtts/employeeSystem.hpp>
 
 namespace es {
+Result GeneralAdmin::editEmployee(Employee *const e,
+                                  PersonnelData const &newData) {
+  if (!e)
+    return Result::EmployeeIsNullptrError;
+
+  auto pd = system_->getEmployeeInfo(e);
+  if (!pd)
+    return Result::EmployeeNotFoundError;
+
+  // Validate: employee ID must not change
+  if (pd->getEmployeeId() != newData.getEmployeeId())
+    return Result::EmployeeIdNotUniqueError;
+
+  // Apply all fields
+  pd->setEmployeeName(newData.getEmployeeName());
+  pd->setEmployeeSurname(newData.getEmployeeSurname());
+  pd->setEmployeeTelephone(newData.getEmployeeTelephone());
+  pd->setEmployeeEmail(newData.getEmployeeEmail());
+  pd->setEmployeeCardId(newData.getEmployeeCardId());
+  pd->setEmployeeStandardWorkTime(newData.getEmployeeStandardWorkTime());
+  pd->setEmployeeMaxWorkTime(newData.getEmployeeMaxWorkTime());
+  pd->setEmployeeHourlyWage(newData.getEmployeeHourlyWage());
+  pd->setEmployeeRole(newData.getEmployeeRole());
+  pd->setEmployeeActive(newData.getEmployeeActive());
+
+  return Result::Success;
+}
+
 Result Driver::logDeliveryBegin() {
   if (attendance_->getCurrentDeliveryTimePeriod()->begin.year)
     return Result::DeliveryAlreadyCheckedIn;

@@ -8,6 +8,9 @@ class Employee {
 public:
   Employee(PersonnelData *p, AttendanceData *a)
       : personnel_{p}, attendance_{a} {}
+
+  virtual ~Employee() = default;
+
   Result checkIn();
   Result checkOut();
   double calculatePay(tu::TimePoint const &start) const;
@@ -57,7 +60,7 @@ public:
   GeneralAdmin(EmployeeSystem *sys) : system_{sys} {}
   void setAbsence(Employee *const);
   void printPaymentList();
-  void editEmployee(Employee *const);
+  Result editEmployee(Employee *const, PersonnelData const &newData);
   void addEmployee(Employee **);
   void activateEmployee(Employee *const);
   void deactivateEmployee(Employee *const);

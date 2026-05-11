@@ -73,6 +73,16 @@ std::string getCurrentTime() {
 }
 
 namespace es {
+std::string formatEmployeeRecord(Employee const *e) {
+  return e->getEmployeeName() + " " + e->getEmployeeSurname() +
+         " ID: " + e->getEmployeeId() + " (" + to_string(e->getEmployeeRole()) +
+         ")";
+}
+
+std::string formatEmployeeRecord(std::size_t index, Employee const *e) {
+  return std::to_string(index) + ". " + formatEmployeeRecord(e);
+}
+
 void Shell::greet() {
   ui_.greeting.set("Welcome to WTTS (Work Time Tracking System)\n");
 }
@@ -142,9 +152,7 @@ void Shell::autoCheckout() {
     message += "Checked out the following emploees: \n";
 
     for (auto employee : checkedOut)
-      message += "\t" + employee->getEmployeeName() + " " +
-                 employee->getEmployeeSurname() + " " +
-                 employee->getEmployeeId() + "\n";
+      message += "\t" + formatEmployeeRecord(employee) + "\n";
 
     MCR_CNF_LOG(message, this);
   }
@@ -292,8 +300,70 @@ void appendGeneralAdminMenuEntries(Shell *s) {
             .description = "Exit", .callback = [s]() { s->requestExit(); }});
       }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Edit employee info", .callback = []() {}});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Edit employee info", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+
+        if (emp.empty()) {
+          MCR_CNF_LOG("No employees found in the system\n", s);
+          return;
+        }
+
+        s->pushMenuState();
+        s->getInterface()->menu.clear();
+
+        for (auto e : emp) {
+          s->getInterface()->menu.push_back(ShellMenuEntry{
+              .description = e->getEmployeeName() + " " +
+                             e->getEmployeeSurname() +
+                             " ID: " + e->getEmployeeId(),
+              .callback = [s, e]() {
+                std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+                auto sys = s->getSystem();
+
+                auto activeEmp =
+                    sys->getEmployeeById(s->getCurrentEmployeeId());
+
+                if (!activeEmp) {
+                  MCR_CNF_LOG("Error: Could not resolve active user\n", s);
+                  return;
+                }
+
+                GeneralAdmin *admin = nullptr;
+                switch (activeEmp->getEmployeeRole()) {
+                case EmployeeRole::Manager:
+                  admin = dynamic_cast<Manager *>(activeEmp);
+                  break;
+                case EmployeeRole::Admin:
+                  admin = dynamic_cast<Admin *>(activeEmp);
+                  break;
+                default:
+                  MCR_CNF_LOG(
+                      "Error: Active user does not have edit privileges\n", s);
+                  return;
+                }
+
+                if (!admin) {
+                  MCR_CNF_LOG("Error: Failed to resolve admin interface\n", s);
+                  return;
+                }
+
+                s->pushMenuState();
+                buildEditEmployeeMenu(s, e, admin);
+              }});
+        }
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Exit", .callback = [s]() { s->requestExit(); }});
+      }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Add employee", .callback = [s]() {
@@ -442,14 +512,9 @@ void appendGeneralAdminMenuEntries(Shell *s) {
               return a->getCurrentTimePeriod()->begin.year;
             });
 
-        std::string message = "\tChecked in employees: \n";
-        for (std::size_t i = 0; i < emp.size(); ++i) {
-          auto const employee = emp[i];
-          message += "\t" + std::to_string(i + 1) + ". " +
-                     employee->getEmployeeName() + " " +
-                     employee->getEmployeeSurname() +
-                     " ID: " + employee->getEmployeeId() + "\n";
-        }
+        std::string message = "Checked in employees: \n";
+        for (std::size_t i = 0; i < emp.size(); ++i)
+          message += "\t" + formatEmployeeRecord(i + 1, emp[i]) + "\n";
 
         MCR_CNF_LOG(message, s);
       }});
@@ -462,14 +527,9 @@ void appendGeneralAdminMenuEntries(Shell *s) {
             sys->getEmployeeBy([](Employee const *, PersonnelData const *,
                                   AttendanceData const *) { return true; });
 
-        std::string message = "\tAll employees: \n";
-        for (std::size_t i = 0; i < emp.size(); ++i) {
-          auto const employee = emp[i];
-          message += "\t" + std::to_string(i + 1) + ". " +
-                     employee->getEmployeeName() + " " +
-                     employee->getEmployeeSurname() +
-                     " ID: " + employee->getEmployeeId() + "\n";
-        }
+        std::string message = "All employees: \n";
+        for (std::size_t i = 0; i < emp.size(); ++i)
+          message += "\t" + formatEmployeeRecord(i + 1, emp[i]) + "\n";
 
         MCR_CNF_LOG(message, s);
       }});
@@ -483,17 +543,163 @@ void appendGeneralAdminMenuEntries(Shell *s) {
                                   AttendanceData const *) { return true; });
 
         std::vector<std::pair<std::string, Employee *>> allEmployees;
-        for (std::size_t i = 0; i < emp.size(); ++i) {
-          auto employee = emp[i];
-          allEmployees.push_back({employee->getEmployeeName() + " " +
-                                      employee->getEmployeeSurname() + " " +
-                                      employee->getEmployeeId(),
-                                  employee});
-        }
+        for (std::size_t i = 0; i < emp.size(); ++i)
+          allEmployees.push_back({formatEmployeeRecord(emp[i]), emp[i]});
 
         s->pushMenuState();
         buildEmployeeSelectionMenu(s, allEmployees);
       }});
+}
+
+void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
+                           std::shared_ptr<PersonnelData>) {
+  // Working copy — all edits staged here until Save is selected
+  auto sys = s->getSystem();
+  auto pd = sys->getEmployeeInfo(e);
+  if (!pd) {
+    MCR_CNF_LOG("Error: Could not retrieve employee data\n", s);
+    return;
+  }
+
+  auto staged = std::make_shared<PersonnelData>(*pd); // copy current state
+
+  auto rebuild = [s, e, admin, staged]() {
+    buildEditEmployeeMenu(s, e, admin, staged);
+  };
+
+  s->getInterface()->menu.clear();
+
+  auto makeStringEntry =
+      [s, staged, rebuild](std::string const &description,
+                           std::string (PersonnelData::*getter)() const,
+                           void (PersonnelData::*setter)(std::string const &)) {
+        return ShellMenuEntry{
+            .description = description + " [" + (staged.get()->*getter)() + "]",
+            .callback = [s, staged, description, setter, rebuild]() {
+              s->setInputInstruction("Enter new " + description + ": \n");
+              auto val = s->readLine();
+              s->setInputInstruction("");
+              if (val.empty()) {
+                MCR_CNF_LOG("No changes made to " + description + "\n", s);
+                return;
+              }
+              (staged.get()->*setter)(val);
+              MCR_CNF_LOG("Staged update to " + description + "\n", s);
+            }};
+      };
+
+  auto makeNumericEntry = [s, staged](std::string const &description,
+                                      unsigned (PersonnelData::*getter)() const,
+                                      void (PersonnelData::*setter)(unsigned),
+                                      std::size_t begin, std::size_t end) {
+    return ShellMenuEntry{
+        .description = description + " [" +
+                       std::to_string((staged.get()->*getter)()) + "]",
+        .callback = [s, staged, description, setter, begin, end]() {
+          std::size_t val{};
+          if (!readBounded("Enter new " + description + ": \n", &val, begin,
+                           end, s))
+            return;
+          (staged.get()->*setter)(static_cast<unsigned>(val));
+          MCR_CNF_LOG("Staged update to " + description + "\n", s);
+        }};
+  };
+
+  s->getInterface()->menu.push_back(
+      makeStringEntry("Name", &PersonnelData::getEmployeeName,
+                      &PersonnelData::setEmployeeName));
+  s->getInterface()->menu.push_back(
+      makeStringEntry("Surname", &PersonnelData::getEmployeeSurname,
+                      &PersonnelData::setEmployeeSurname));
+  s->getInterface()->menu.push_back(
+      makeStringEntry("Telephone", &PersonnelData::getEmployeeTelephone,
+                      &PersonnelData::setEmployeeTelephone));
+  s->getInterface()->menu.push_back(
+      makeStringEntry("Email", &PersonnelData::getEmployeeEmail,
+                      &PersonnelData::setEmployeeEmail));
+  s->getInterface()->menu.push_back(
+      makeStringEntry("Card ID", &PersonnelData::getEmployeeCardId,
+                      &PersonnelData::setEmployeeCardId));
+  s->getInterface()->menu.push_back(
+      makeStringEntry("Employee ID", &PersonnelData::getEmployeeId,
+                      &PersonnelData::setEmployeeId));
+  s->getInterface()->menu.push_back(
+      makeNumericEntry("Standard work time (h/week)",
+                       &PersonnelData::getEmployeeStandardWorkTime,
+                       &PersonnelData::setEmployeeStandardWorkTime, 1, 169));
+  s->getInterface()->menu.push_back(makeNumericEntry(
+      "Max work time (h/week)", &PersonnelData::getEmployeeMaxWorkTime,
+      &PersonnelData::setEmployeeMaxWorkTime, 1, 169));
+  s->getInterface()->menu.push_back(
+      makeNumericEntry("Hourly wage", &PersonnelData::getEmployeeHourlyWage,
+                       &PersonnelData::setEmployeeHourlyWage, 1, 100001));
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Role [" + to_string(staged->getEmployeeRole()) + "]",
+      .callback = [s, staged]() {
+        std::size_t roleIdx{};
+        if (!readBounded("Select new role: \n"
+                         "\t1. Employee\n"
+                         "\t2. Driver\n"
+                         "\t3. Manager\n"
+                         "\t4. Admin\n",
+                         &roleIdx, 1, 5, s))
+          return;
+        EmployeeRole role{};
+        switch (roleIdx) {
+        case 1:
+          role = EmployeeRole::Employee;
+          break;
+        case 2:
+          role = EmployeeRole::Driver;
+          break;
+        case 3:
+          role = EmployeeRole::Manager;
+          break;
+        case 4:
+          role = EmployeeRole::Admin;
+          break;
+        }
+        staged->setEmployeeRole(role);
+        MCR_CNF_LOG("Staged update to Role\n", s);
+      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = std::string{"Active ["} +
+                     (staged->getEmployeeActive() ? "Yes" : "No") + "]",
+      .callback = [s, staged]() {
+        std::size_t activeIdx{};
+        if (!readBounded("Set active status: \n"
+                         "\t1. Yes\n"
+                         "\t2. No\n",
+                         &activeIdx, 1, 3, s))
+          return;
+        staged->setEmployeeActive(activeIdx == 1);
+        MCR_CNF_LOG("Staged update to Active status\n", s);
+      }});
+
+  // Save — this is where GeneralAdmin::editEmployee does its work
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Save changes", .callback = [s, e, admin, staged]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto result = admin->editEmployee(e, *staged);
+        if (result != Result::Success) {
+          MCR_CNF_LOG(
+              "Error: Failed to save changes: " + to_string(result) + "\n", s);
+          return;
+        }
+        MCR_CNF_LOG("Changes saved successfully\n", s);
+        s->popMenuState();
+      }});
+
+  s->getInterface()->menu.push_back(
+      ShellMenuEntry{.description = "Discard & back", .callback = [s]() {
+                       MCR_CNF_LOG("Changes discarded\n", s);
+                       s->popMenuState();
+                     }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
 void buildAbsenceEmployeeSelectionMenu(
