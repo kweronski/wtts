@@ -295,8 +295,138 @@ void appendGeneralAdminMenuEntries(Shell *s) {
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Edit employee info", .callback = []() {}});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Add employee", .callback = []() {}});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Add employee", .callback = [s]() {
+        // --- Collect string fields ---
+        auto readString = [s](std::string const &prompt) -> std::string {
+          s->setInputInstruction(prompt);
+          auto val = s->readLine();
+          s->setInputInstruction("");
+          return val;
+        };
+
+        std::string name = readString("Enter employee name: \n");
+        std::string surname = readString("Enter employee surname: \n");
+        std::string phone = readString("Enter employee telephone: \n");
+        std::string email = readString("Enter employee email: \n");
+        std::string cardId = readString("Enter employee card ID: \n");
+        std::string empId = readString("Enter employee ID: \n");
+
+        // --- Collect numeric fields ---
+        std::size_t stdWork{}, maxWork{}, wage{};
+
+        if (!readBounded("Enter standard work time (hours/day): \n", &stdWork,
+                         1, 169, s))
+          return;
+        if (!readBounded("Enter max work time (hours/day): \n", &maxWork, 1,
+                         169, s))
+          return;
+        if (!readBounded("Enter hourly wage: \n", &wage, 1, 100001, s))
+          return;
+
+        // --- Role selection ---
+        std::size_t roleIdx{};
+        if (!readBounded("Select role: \n"
+                         "\t1. Employee\n"
+                         "\t2. Driver\n"
+                         "\t3. Manager\n"
+                         "\t4. Admin\n",
+                         &roleIdx, 1, 5, s))
+          return;
+
+        EmployeeRole role{};
+        switch (roleIdx) {
+        case 1:
+          role = EmployeeRole::Employee;
+          break;
+        case 2:
+          role = EmployeeRole::Driver;
+          break;
+        case 3:
+          role = EmployeeRole::Manager;
+          break;
+        case 4:
+          role = EmployeeRole::Admin;
+          break;
+        }
+
+        // --- Active status ---
+        std::size_t activeIdx{};
+        if (!readBounded("Set employee as active? \n\t1. Yes\n\t2. No\n",
+                         &activeIdx, 1, 3, s))
+          return;
+        bool active = (activeIdx == 1);
+
+        // --- Add to system ---
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        PersonnelData *pd{};
+        AttendanceData *ad{};
+        Result result{};
+
+        switch (roleIdx) {
+        case 1: {
+          Employee *e{};
+          result = sys->addEmployee(&e, &pd, &ad);
+          break;
+        }
+        case 2: {
+          Driver *e{};
+          result = sys->addEmployee(&e, &pd, &ad);
+          break;
+        }
+        case 3: {
+          Manager *e{};
+          result = sys->addEmployee(&e, &pd, &ad);
+          break;
+        }
+        case 4: {
+          Admin *e{};
+          result = sys->addEmployee(&e, &pd, &ad);
+          break;
+        }
+        }
+
+        if (result != Result::Success) {
+          MCR_CNF_LOG(
+              "Error: Failed to add employee: " + to_string(result) + "\n", s);
+          return;
+        }
+
+        if (!pd) {
+          MCR_CNF_LOG("Error: Personnel data pointer was not assigned\n", s);
+          return;
+        }
+
+        // --- Populate PersonnelData via returned pointer ---
+        pd->setEmployeeName(name);
+        pd->setEmployeeSurname(surname);
+        pd->setEmployeeTelephone(phone);
+        pd->setEmployeeEmail(email);
+        pd->setEmployeeCardId(cardId);
+        pd->setEmployeeId(empId);
+        pd->setEmployeeStandardWorkTime(static_cast<unsigned>(stdWork));
+        pd->setEmployeeMaxWorkTime(static_cast<unsigned>(maxWork));
+        pd->setEmployeeHourlyWage(static_cast<unsigned>(wage));
+        pd->setEmployeeRole(role);
+        pd->setEmployeeActive(active);
+
+        std::ostringstream oss;
+        oss << "Successfully added employee:\n"
+            << "\tName:                " << name << " " << surname << "\n"
+            << "\tID:                  " << empId << "\n"
+            << "\tCard ID:             " << cardId << "\n"
+            << "\tTelephone:           " << phone << "\n"
+            << "\tEmail:               " << email << "\n"
+            << "\tRole:                " << to_string(role) << "\n"
+            << "\tStandard work time:  " << stdWork << "h/week\n"
+            << "\tMax work time:       " << maxWork << "h/week\n"
+            << "\tHourly wage:         " << wage << "\n"
+            << "\tActive:              " << (active ? "Yes" : "No") << "\n";
+
+        MCR_CNF_LOG(oss.str(), s);
+      }});
 
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Print payment list", .callback = []() {}});
