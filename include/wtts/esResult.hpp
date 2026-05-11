@@ -16,4 +16,4 @@ enum class Result {
 };
 
 std::string to_string(Result const);
-}
+} // namespace es
