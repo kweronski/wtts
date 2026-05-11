@@ -230,7 +230,67 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Calculate employee pay", .callback = []() {}});
+      .description = "Calculate employee pay", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+
+        if (emp.empty()) {
+          MCR_CNF_LOG("No employees found in the system\n", s);
+          return;
+        }
+
+        s->pushMenuState();
+
+        s->getInterface()->menu.clear();
+
+        for (auto e : emp) {
+          s->getInterface()->menu.push_back(ShellMenuEntry{
+              .description = e->getEmployeeName() + " " +
+                             e->getEmployeeSurname() +
+                             " ID: " + e->getEmployeeId(),
+              .callback = [s, e]() {
+                std::size_t year, month;
+                tu::TimePoint tp;
+                tp.populate();
+
+                if (!readBounded("Enter start year: \n", &year, 1970,
+                                 tp.year + 1, s)) {
+                  s->popMenuState();
+                  return;
+                }
+                if (!readBounded("Enter start month: \n", &month, 1, 13, s)) {
+                  s->popMenuState();
+                  return;
+                }
+
+                tu::TimePoint start{.year = unsigned(year),
+                                    .month = unsigned(month),
+                                    .day = 1,
+                                    .hour = 0,
+                                    .minute = 0};
+
+                auto pay = e->calculatePay(start);
+
+                std::ostringstream oss;
+                oss << std::fixed << std::setprecision(2);
+                oss << "Calculated pay for " << e->getEmployeeName() << " "
+                    << e->getEmployeeSurname() << ": " << pay << "\n";
+
+                MCR_CNF_LOG(oss.str(), s);
+                s->popMenuState();
+              }});
+        }
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Exit", .callback = [s]() { s->requestExit(); }});
+      }});
 
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Edit employee info", .callback = []() {}});
@@ -364,9 +424,9 @@ void buildEmployeeSelectionMenu(
     std::vector<std::pair<std::string, Employee *>> const &employees) {
   s->getInterface()->menu.clear();
 
-  for (auto const &e : employees) {
+  for (auto e : employees) {
     s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = e.first, .callback = [s, &e]() {
+        .description = e.first, .callback = [s, e]() {
           s->pushMenuState();
           s->setCurrentEmployeeId(e.second->getEmployeeId());
 
