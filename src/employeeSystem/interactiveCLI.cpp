@@ -725,15 +725,51 @@ void appendEmployeeMenuEntries(Shell *s) {
                       s);
           return;
         }
-
         MCR_CNF_LOG("Successfully checked in\n", s);
       }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Check-out", .callback = []() {}});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Check-out", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+        if (auto result = emp->checkOut(); result != Result::Success) {
+          MCR_CNF_LOG(
+              "Could not check out; Reason: " + to_string(result) + "\n", s);
+          return;
+        }
+        MCR_CNF_LOG("Successfully checked out\n", s);
+      }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Print info", .callback = []() {}});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Print info", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+
+        if (!emp) {
+          MCR_CNF_LOG("Error: Employee not found\n", s);
+          return;
+        }
+
+        std::ostringstream oss;
+        oss << "Employee info:\n"
+            << "\tName:               " << emp->getEmployeeName() << " "
+            << emp->getEmployeeSurname() << "\n"
+            << "\tID:                 " << emp->getEmployeeId() << "\n"
+            << "\tCard ID:            " << emp->getEmployeeCardId() << "\n"
+            << "\tTelephone:          " << emp->getEmployeeTelephone() << "\n"
+            << "\tEmail:              " << emp->getEmployeeEmail() << "\n"
+            << "\tRole:               " << to_string(emp->getEmployeeRole())
+            << "\n"
+            << "\tStandard work time: " << emp->getEmployeeStandardWorkTime()
+            << "h/week\n"
+            << "\tMax work time:      " << emp->getEmployeeMaxWorkTime()
+            << "h/week\n"
+            << "\tHourly wage:        " << emp->getEmployeeHourlyWage() << "\n"
+            << "\tActive:             "
+            << (emp->getEmployeeActive() ? "Yes" : "No") << "\n";
+
+        MCR_CNF_LOG(oss.str(), s);
+      }});
 
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Calculate pay", .callback = [s]() {
