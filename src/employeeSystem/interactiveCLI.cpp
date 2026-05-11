@@ -590,7 +590,74 @@ void buildEmployeeSelectionMenu(
 
 void appendAdminMenuEntries(Shell *s) {
   s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Remove employee from system", .callback = []() {}});
+      .description = "Remove employee from system", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+
+        if (emp.empty()) {
+          MCR_CNF_LOG("No employees found in the system\n", s);
+          return;
+        }
+
+        s->pushMenuState();
+        s->getInterface()->menu.clear();
+
+        for (auto e : emp) {
+          s->getInterface()->menu.push_back(ShellMenuEntry{
+              .description = e->getEmployeeName() + " " +
+                             e->getEmployeeSurname() +
+                             " ID: " + e->getEmployeeId(),
+              .callback = [s, e]() {
+                std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+                auto sys = s->getSystem();
+
+                // Confirm before removing
+                std::size_t confirmIdx{};
+                if (!readBounded("Are you sure you want to remove " +
+                                     e->getEmployeeName() + " " +
+                                     e->getEmployeeSurname() +
+                                     "?\n"
+                                     "\t1. Yes\n"
+                                     "\t2. No\n",
+                                 &confirmIdx, 1, 3, s)) {
+                  s->popMenuState();
+                  return;
+                }
+
+                if (confirmIdx == 2) {
+                  s->popMenuState();
+                  return;
+                }
+
+                auto result = sys->removeEmployee(e->getEmployeeId());
+
+                if (result != Result::Success) {
+                  MCR_CNF_LOG("Error: Failed to remove employee: " +
+                                  to_string(result) + "\n",
+                              s);
+                  s->popMenuState();
+                  return;
+                }
+
+                MCR_CNF_LOG(
+                    "Successfully removed employee: " + e->getEmployeeName() +
+                        " " + e->getEmployeeSurname() +
+                        " ID: " + e->getEmployeeId() + "\n",
+                    s);
+                s->popMenuState();
+              }});
+        }
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Exit", .callback = [s]() { s->requestExit(); }});
+      }});
 
   s->getInterface()->menu.push_back(
       ShellMenuEntry{.description = "Edit system settings", .callback = [s]() {

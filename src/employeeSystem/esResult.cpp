@@ -31,6 +31,9 @@ std::string to_string(Result const r) {
   case Result::AttendanceExtractionError:
     out = "AttendanceExtractionError";
     break;
+  case Result::EmployeeIsCheckedInError:
+    out = "EmployeeIsCheckedInError";
+    break;
   }
   return out;
 }

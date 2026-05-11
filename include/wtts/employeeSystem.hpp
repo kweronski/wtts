@@ -64,6 +64,8 @@ public:
     }
   }
 
+  Result removeEmployee(std::string const &id);
+
 private:
   std::set<std::unique_ptr<Employee>> employees_;
   std::set<std::unique_ptr<Driver>> drivers_;
