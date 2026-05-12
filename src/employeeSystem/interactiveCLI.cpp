@@ -977,14 +977,39 @@ void appendEmployeeMenuEntries(Shell *s) {
         MCR_CNF_LOG(oss.str(), s);
       }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Calculate pay", .callback = [s]() {
-                       // auto sys = s->getSystem();
-                       auto id = s->getCurrentEmployeeId();
-                       // auto emp = sys->getEmployeeById(id);
-                       auto tp = tu::TimePoint{};
-                       tp.populate(); // now
-                     }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Calculate pay", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+        if (!emp) {
+          MCR_CNF_LOG("Error: Employee not found\n", s);
+          return;
+        }
+
+        std::size_t year, month;
+        tu::TimePoint tp;
+        tp.populate();
+
+        if (!readBounded("Enter start year: \n", &year, 1970, tp.year + 1, s))
+          return;
+        if (!readBounded("Enter start month: \n", &month, 1, 13, s))
+          return;
+
+        tu::TimePoint start{.year = unsigned(year),
+                            .month = unsigned(month),
+                            .day = 1,
+                            .hour = 0,
+                            .minute = 0};
+
+        auto pay = emp->calculatePay(start);
+
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(2);
+        oss << "Calculated pay for " << emp->getEmployeeName() << " "
+            << emp->getEmployeeSurname() << ": " << pay << "\n";
+
+        MCR_CNF_LOG(oss.str(), s);
+      }});
 }
 
 void appendDriverMenuEntries(Shell *s) {
