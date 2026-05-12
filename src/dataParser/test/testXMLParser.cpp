@@ -15,9 +15,10 @@ enum { success, error };
   do {                                                                         \
     std::string txtLine;                                                       \
     std::getline(c, txtLine);                                                  \
+    ++lineNumber;                                                              \
     if (a != txtLine) {                                                        \
       std::cerr << a << " [xml]"                                               \
-                << " != " << txtLine << " [txt]";                              \
+                << " != " << txtLine << " [txt@" << lineNumber << "]";         \
       std::cerr << " ----------------------> Data missmatch! \n";              \
       return error;                                                            \
     }                                                                          \
@@ -88,6 +89,7 @@ int main(int argc, char **argv) {
    */
 
   std::ifstream file(argv[2]);
+  std::size_t lineNumber = 0;
   if (!file.is_open()) {
     std::cerr << "Cannot open the file\n";
     std::cout << "Path: " << argv[2] << std::endl;

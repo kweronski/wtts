@@ -26,6 +26,8 @@ void buildEmployeeMenu(Shell *s, bool addJmpToPrev);
 void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
 
+void buildPaymentListMenu(Shell *, std::vector<Employee *> const &);
+
 void buildAbsenceEmployeeSelectionMenu(Shell *, std::vector<Employee *> const &,
                                        GeneralAdmin *admin = nullptr);
 

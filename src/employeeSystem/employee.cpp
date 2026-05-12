@@ -154,4 +154,22 @@ double Employee::calculatePay(tu::TimePoint const &start) const {
 
   return total;
 }
+
+double Employee::calculatePay(tu::TimePeriod const &period) const {
+  auto const hourlyWage = this->getEmployeeHourlyWage();
+  auto const minuteWage = double(hourlyWage) / 60.0;
+  double total{};
+
+  for (auto const &p : attendance_->getRecords()) {
+    bool rangeBeginNOK = !(p.begin >= period.begin);
+    bool rangeEndNOK = period.end < p.end;
+    if (rangeBeginNOK || rangeEndNOK || p.type != period.type)
+      continue;
+
+    auto minutes = p.end - p.begin;
+    total += minutes * minuteWage;
+  }
+
+  return total;
+}
 } // namespace es

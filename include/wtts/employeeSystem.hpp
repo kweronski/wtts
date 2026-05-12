@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include <wtts/employee.hpp>
+#include <wtts/paymentList.hpp>
 
 namespace es {
 class EmployeeSystem {
@@ -45,6 +46,9 @@ public:
                                        AttendanceData const *)>;
 
   std::vector<Employee *> getEmployeeBy(Predicate func);
+
+  std::vector<PaymentRecord> createPaymentList(tu::TimePeriod const &tp,
+                                               Predicate func);
 
   Result setEmployeeAbsence(Employee *, tu::TimePoint const &);
 

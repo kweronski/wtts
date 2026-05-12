@@ -16,6 +16,8 @@ public:
   Result checkOut();
   double calculatePay(tu::TimePoint const &start) const;
 
+  double calculatePay(tu::TimePeriod const &period) const;
+
   bool getEmployeeActive() const { return personnel_->getEmployeeActive(); }
   std::string getEmployeeName() const { return personnel_->getEmployeeName(); }
   std::string getEmployeeSurname() const {
