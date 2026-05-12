@@ -55,14 +55,14 @@ public:
 
 class EmployeeSystem;
 
+enum class SystemSettings { AutoCheckoutHour, AutoCheckoutMinute };
+
 class GeneralAdmin {
 public:
   GeneralAdmin(EmployeeSystem *sys) : system_{sys} {}
   Result setAbsence(std::string const &id, tu::TimePoint const &);
   Result addEmployee(PersonnelData const &);
   Result editEmployee(std::string const &id, PersonnelData const &newData);
-  Result activateEmployee(std::string const &id);
-  Result deactivateEmployee(std::string const &id);
 
 protected:
   EmployeeSystem *system_;
@@ -78,7 +78,7 @@ class Admin : public Employee, public GeneralAdmin {
 public:
   Admin(PersonnelData *p, AttendanceData *a, EmployeeSystem *s)
       : Employee(p, a), GeneralAdmin(s) {}
-  void editSettings();
+  Result editSettings(SystemSettings setting, unsigned value);
   void removeEmployee(Employee *const);
 };
 } // namespace es

@@ -67,29 +67,15 @@ Result GeneralAdmin::editEmployee(std::string const &id,
   return Result::Success;
 }
 
-Result GeneralAdmin::activateEmployee(std::string const &id) {
-  auto e = system_->getEmployeeById(id);
-  if (!e)
-    return Result::EmployeeNotFoundError;
-  auto pd = system_->getEmployeeInfo(e);
-  if (!pd)
-    return Result::EmployeeNotFoundError;
-  if (pd->getEmployeeActive())
-    return Result::EmployeeAlreadyActive;
-  pd->setEmployeeActive(true);
-  return Result::Success;
-}
-
-Result GeneralAdmin::deactivateEmployee(std::string const &id) {
-  auto e = system_->getEmployeeById(id);
-  if (!e)
-    return Result::EmployeeNotFoundError;
-  auto pd = system_->getEmployeeInfo(e);
-  if (!pd)
-    return Result::EmployeeNotFoundError;
-  if (!pd->getEmployeeActive())
-    return Result::EmployeeAlreadyInactive;
-  pd->setEmployeeActive(false);
+Result Admin::editSettings(SystemSettings setting, unsigned value) {
+  switch (setting) {
+  case SystemSettings::AutoCheckoutHour:
+    system_->setAutoCheckoutTime(value, system_->getAutoCheckoutTime().second);
+    break;
+  case SystemSettings::AutoCheckoutMinute:
+    system_->setAutoCheckoutTime(system_->getAutoCheckoutTime().first, value);
+    break;
+  }
   return Result::Success;
 }
 

@@ -14,9 +14,7 @@ enum class Result {
   DeliveryNotCheckedIn,
   AttendanceExtractionError,
   EmployeeIsCheckedInError,
-  UnknownEmployeeRoleError,
-  EmployeeAlreadyActive,
-  EmployeeAlreadyInactive
+  UnknownEmployeeRoleError
 };
 
 std::string to_string(Result const);

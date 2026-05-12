@@ -817,7 +817,7 @@ void buildEmployeeSelectionMenu(
           }
 
           s->setPromptText(e.second->getEmployeeName() + " " +
-                           e.second->getEmployeeSurname() + +" (" +
+                           e.second->getEmployeeSurname() + " (" +
                            to_string(e.second->getEmployeeRole()) + ")> ");
         }});
   }
@@ -913,11 +913,17 @@ void appendAdminMenuEntries(Shell *s) {
             .description = "Exit", .callback = [s]() { s->requestExit(); }});
       }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Edit system settings", .callback = [s]() {
-                       s->pushMenuState();
-                       buildSettingsMenu(s);
-                     }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Edit system settings", .callback = [s]() {
+        Admin *admin = nullptr;
+        if (!s->getCurrentEmployeeId().empty()) {
+          std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+          admin = dynamic_cast<Admin *>(
+              s->getSystem()->getEmployeeById(s->getCurrentEmployeeId()));
+        }
+        s->pushMenuState();
+        buildSettingsMenu(s, admin);
+      }});
 }
 
 bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
@@ -945,20 +951,27 @@ bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
   return true;
 }
 
-void buildSettingsMenu(Shell *s) {
+void buildSettingsMenu(Shell *s, Admin *admin) {
   s->getInterface()->menu.clear();
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Set auto checkout time", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-
+      .description = "Set auto checkout time", .callback = [s, admin]() {
         std::size_t hour, minute;
         if (!readBounded("Enter auto checkout hour: \n", &hour, 0, 25, s))
           return;
         if (!readBounded("Enter auto checkout minute: \n", &minute, 0, 61, s))
           return;
 
-        s->getSystem()->setAutoCheckoutTime(hour, minute);
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        if (admin) {
+          admin->editSettings(SystemSettings::AutoCheckoutHour,
+                              static_cast<unsigned>(hour));
+          admin->editSettings(SystemSettings::AutoCheckoutMinute,
+                              static_cast<unsigned>(minute));
+        } else {
+          s->getSystem()->setAutoCheckoutTime(static_cast<unsigned>(hour),
+                                              static_cast<unsigned>(minute));
+        }
         s->popMenuState();
       }});
 

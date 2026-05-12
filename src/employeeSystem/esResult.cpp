@@ -37,12 +37,6 @@ std::string to_string(Result const r) {
   case Result::UnknownEmployeeRoleError:
     out = "UnknownEmployeeRoleError";
     break;
-  case Result::EmployeeAlreadyActive:
-    out = "EmployeeAlreadyActive";
-    break;
-  case Result::EmployeeAlreadyInactive:
-    out = "EmployeeAlreadyInactive";
-    break;
   }
   return out;
 }
