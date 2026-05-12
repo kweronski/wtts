@@ -30,6 +30,7 @@ void buildPaymentListMenu(Shell *, std::vector<Employee *> const &);
 
 void buildAbsenceEmployeeSelectionMenu(Shell *, std::vector<Employee *> const &,
                                        GeneralAdmin *admin = nullptr);
+
 void buildSettingsMenu(Shell *s, Admin *admin = nullptr);
 
 void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,

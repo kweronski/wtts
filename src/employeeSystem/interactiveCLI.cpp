@@ -824,7 +824,6 @@ void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
-  //>>>>>>> 60ba0f599c8817f419705ef58bcf7ecadc1f1693
 }
 
 void buildAbsenceEmployeeSelectionMenu(Shell *s,
