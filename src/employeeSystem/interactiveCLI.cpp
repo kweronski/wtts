@@ -73,6 +73,33 @@ std::string getCurrentTime() {
 }
 
 namespace es {
+
+// Returns the GeneralAdmin* for the currently selected employee, or nullptr
+// if no employee is selected (anonymous admin) or the employee lacks admin
+// privileges. Logs an error message and returns nullptr on failure when an
+// employee IS selected but the cast fails.
+static GeneralAdmin *resolveAdmin(Shell *s) {
+  auto const &id = s->getCurrentEmployeeId();
+  if (id.empty())
+    return nullptr;
+
+  auto emp = s->getSystem()->getEmployeeById(id);
+  if (!emp) {
+    MCR_CNF_LOG("Error: Could not resolve active user\n", s);
+    return nullptr;
+  }
+
+  switch (emp->getEmployeeRole()) {
+  case EmployeeRole::Manager:
+    return dynamic_cast<Manager *>(emp);
+  case EmployeeRole::Admin:
+    return dynamic_cast<Admin *>(emp);
+  default:
+    MCR_CNF_LOG("Error: Active user does not have admin privileges\n", s);
+    return nullptr;
+  }
+}
+
 std::string formatEmployeeRecord(Employee const *e) {
   return e->getEmployeeName() + " " + e->getEmployeeSurname() +
          " ID: " + e->getEmployeeId() + " (" + to_string(e->getEmployeeRole()) +
@@ -233,8 +260,11 @@ void appendGeneralAdminMenuEntries(Shell *s) {
             sys->getEmployeeBy([](Employee const *, PersonnelData const *,
                                   AttendanceData const *) { return true; });
 
+        auto admin =
+            s->getCurrentEmployeeId().empty() ? nullptr : resolveAdmin(s);
+
         s->pushMenuState();
-        buildAbsenceEmployeeSelectionMenu(s, emp);
+        buildAbsenceEmployeeSelectionMenu(s, emp, admin);
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
@@ -324,34 +354,11 @@ void appendGeneralAdminMenuEntries(Shell *s) {
                              " ID: " + e->getEmployeeId(),
               .callback = [s, e]() {
                 std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-                auto sys = s->getSystem();
 
-                auto activeEmp =
-                    sys->getEmployeeById(s->getCurrentEmployeeId());
-
-                if (!activeEmp) {
-                  MCR_CNF_LOG("Error: Could not resolve active user\n", s);
-                  return;
-                }
-
-                GeneralAdmin *admin = nullptr;
-                switch (activeEmp->getEmployeeRole()) {
-                case EmployeeRole::Manager:
-                  admin = dynamic_cast<Manager *>(activeEmp);
-                  break;
-                case EmployeeRole::Admin:
-                  admin = dynamic_cast<Admin *>(activeEmp);
-                  break;
-                default:
-                  MCR_CNF_LOG(
-                      "Error: Active user does not have edit privileges\n", s);
-                  return;
-                }
-
-                if (!admin) {
-                  MCR_CNF_LOG("Error: Failed to resolve admin interface\n", s);
-                  return;
-                }
+                // anonymous admin → nullptr, selected employee → GeneralAdmin*
+                GeneralAdmin *admin = s->getCurrentEmployeeId().empty()
+                                          ? nullptr
+                                          : resolveAdmin(s);
 
                 s->pushMenuState();
                 buildEditEmployeeMenu(s, e, admin);
@@ -427,35 +434,56 @@ void appendGeneralAdminMenuEntries(Shell *s) {
           return;
         bool active = (activeIdx == 1);
 
+        // --- Build personnel record ---
+        PersonnelData newPd{};
+        newPd.setEmployeeName(name);
+        newPd.setEmployeeSurname(surname);
+        newPd.setEmployeeTelephone(phone);
+        newPd.setEmployeeEmail(email);
+        newPd.setEmployeeCardId(cardId);
+        newPd.setEmployeeId(empId);
+        newPd.setEmployeeStandardWorkTime(static_cast<unsigned>(stdWork));
+        newPd.setEmployeeMaxWorkTime(static_cast<unsigned>(maxWork));
+        newPd.setEmployeeHourlyWage(static_cast<unsigned>(wage));
+        newPd.setEmployeeRole(role);
+        newPd.setEmployeeActive(active);
+
         // --- Add to system ---
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
         auto sys = s->getSystem();
 
-        PersonnelData *pd{};
-        AttendanceData *ad{};
         Result result{};
 
-        switch (roleIdx) {
-        case 1: {
-          Employee *e{};
-          result = sys->addEmployee(&e, &pd, &ad);
-          break;
-        }
-        case 2: {
-          Driver *e{};
-          result = sys->addEmployee(&e, &pd, &ad);
-          break;
-        }
-        case 3: {
-          Manager *e{};
-          result = sys->addEmployee(&e, &pd, &ad);
-          break;
-        }
-        case 4: {
-          Admin *e{};
-          result = sys->addEmployee(&e, &pd, &ad);
-          break;
-        }
+        if (auto admin =
+                s->getCurrentEmployeeId().empty() ? nullptr : resolveAdmin(s)) {
+          result = admin->addEmployee(newPd);
+        } else {
+          PersonnelData *pd{};
+          AttendanceData *ad{};
+          switch (roleIdx) {
+          case 1: {
+            Employee *e{};
+            result = sys->addEmployee(&e, &pd, &ad);
+            break;
+          }
+          case 2: {
+            Driver *e{};
+            result = sys->addEmployee(&e, &pd, &ad);
+            break;
+          }
+          case 3: {
+            Manager *e{};
+            result = sys->addEmployee(&e, &pd, &ad);
+            break;
+          }
+          case 4: {
+            Admin *e{};
+            result = sys->addEmployee(&e, &pd, &ad);
+            break;
+          }
+          }
+          if (result == Result::Success && pd)
+            *pd = newPd;
         }
 
         if (result != Result::Success) {
@@ -463,24 +491,6 @@ void appendGeneralAdminMenuEntries(Shell *s) {
               "Error: Failed to add employee: " + to_string(result) + "\n", s);
           return;
         }
-
-        if (!pd) {
-          MCR_CNF_LOG("Error: Personnel data pointer was not assigned\n", s);
-          return;
-        }
-
-        // --- Populate PersonnelData via returned pointer ---
-        pd->setEmployeeName(name);
-        pd->setEmployeeSurname(surname);
-        pd->setEmployeeTelephone(phone);
-        pd->setEmployeeEmail(email);
-        pd->setEmployeeCardId(cardId);
-        pd->setEmployeeId(empId);
-        pd->setEmployeeStandardWorkTime(static_cast<unsigned>(stdWork));
-        pd->setEmployeeMaxWorkTime(static_cast<unsigned>(maxWork));
-        pd->setEmployeeHourlyWage(static_cast<unsigned>(wage));
-        pd->setEmployeeRole(role);
-        pd->setEmployeeActive(active);
 
         std::ostringstream oss;
         oss << "Successfully added employee:\n"
@@ -678,11 +688,29 @@ void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
         MCR_CNF_LOG("Staged update to Active status\n", s);
       }});
 
-  // Save — this is where GeneralAdmin::editEmployee does its work
+  // Save — routes through GeneralAdmin when employee selected, directly via
+  // sys when in anonymous admin mode (admin == nullptr)
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Save changes", .callback = [s, e, admin, staged]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto result = admin->editEmployee(e, *staged);
+
+        Result result{};
+        if (admin) {
+          result = admin->editEmployee(e->getEmployeeId(), *staged);
+        } else {
+          auto pd = s->getSystem()->getEmployeeInfo(e);
+          if (!pd) {
+            MCR_CNF_LOG("Error: Could not retrieve employee data\n", s);
+            return;
+          }
+          if (pd->getEmployeeId() != staged->getEmployeeId()) {
+            MCR_CNF_LOG("Error: Employee ID must not change\n", s);
+            return;
+          }
+          *pd = *staged;
+          result = Result::Success;
+        }
+
         if (result != Result::Success) {
           MCR_CNF_LOG(
               "Error: Failed to save changes: " + to_string(result) + "\n", s);
@@ -702,17 +730,17 @@ void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
 }
 
-void buildAbsenceEmployeeSelectionMenu(
-    Shell *s, std::vector<Employee *> const &employees) {
+void buildAbsenceEmployeeSelectionMenu(Shell *s,
+                                       std::vector<Employee *> const &employees,
+                                       GeneralAdmin *admin) {
   s->getInterface()->menu.clear();
 
   for (auto e : employees) {
     s->getInterface()->menu.push_back(ShellMenuEntry{
         .description = e->getEmployeeName() + " " + e->getEmployeeSurname() +
                        " ID: " + e->getEmployeeId(),
-        .callback = [s, e]() {
+        .callback = [s, e, admin]() {
           std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-          auto sys = s->getSystem();
 
           std::size_t year, month, day;
           tu::TimePoint tp;
@@ -732,17 +760,24 @@ void buildAbsenceEmployeeSelectionMenu(
             return;
           }
 
-          if (auto result = sys->setEmployeeAbsence(
-                  e, tu::TimePoint{.year = unsigned(year),
-                                   .month = unsigned(month),
-                                   .day = unsigned(day),
-                                   .hour = 0,
-                                   .minute = 0});
-              result != Result::Success) {
+          tu::TimePoint absencePoint{.year = unsigned(year),
+                                     .month = unsigned(month),
+                                     .day = unsigned(day),
+                                     .hour = 0,
+                                     .minute = 0};
+
+          Result result{};
+          if (admin)
+            result = admin->setAbsence(e->getEmployeeId(), absencePoint);
+          else
+            result = s->getSystem()->setEmployeeAbsence(e, absencePoint);
+
+          if (result != Result::Success) {
             MCR_CNF_LOG(
                 "Error: Failed to set absence: " + to_string(result) + "\n", s);
-          } else
+          } else {
             MCR_CNF_LOG("Successfully set absence data\n", s);
+          }
 
           s->popMenuState();
         }});
@@ -839,14 +874,27 @@ void appendAdminMenuEntries(Shell *s) {
                   return;
                 }
 
-                auto result = sys->removeEmployee(e->getEmployeeId());
-
-                if (result != Result::Success) {
-                  MCR_CNF_LOG("Error: Failed to remove employee: " +
-                                  to_string(result) + "\n",
-                              s);
-                  s->popMenuState();
-                  return;
+                if (!s->getCurrentEmployeeId().empty()) {
+                  auto activeEmp =
+                      sys->getEmployeeById(s->getCurrentEmployeeId());
+                  auto *adminPtr = dynamic_cast<Admin *>(activeEmp);
+                  if (!adminPtr) {
+                    MCR_CNF_LOG(
+                        "Error: Active user does not have remove privileges\n",
+                        s);
+                    s->popMenuState();
+                    return;
+                  }
+                  adminPtr->removeEmployee(e);
+                } else {
+                  auto result = sys->removeEmployee(e->getEmployeeId());
+                  if (result != Result::Success) {
+                    MCR_CNF_LOG("Error: Failed to remove employee: " +
+                                    to_string(result) + "\n",
+                                s);
+                    s->popMenuState();
+                    return;
+                  }
                 }
 
                 MCR_CNF_LOG(

@@ -58,12 +58,11 @@ class EmployeeSystem;
 class GeneralAdmin {
 public:
   GeneralAdmin(EmployeeSystem *sys) : system_{sys} {}
-  void setAbsence(Employee *const);
-  void printPaymentList();
-  Result editEmployee(Employee *const, PersonnelData const &newData);
-  void addEmployee(Employee **);
-  void activateEmployee(Employee *const);
-  void deactivateEmployee(Employee *const);
+  Result setAbsence(std::string const &id, tu::TimePoint const &);
+  Result addEmployee(PersonnelData const &);
+  Result editEmployee(std::string const &id, PersonnelData const &newData);
+  Result activateEmployee(std::string const &id);
+  Result deactivateEmployee(std::string const &id);
 
 protected:
   EmployeeSystem *system_;
