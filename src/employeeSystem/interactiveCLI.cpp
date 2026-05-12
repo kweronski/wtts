@@ -278,6 +278,88 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "View employee attendance", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto sys = s->getSystem();
+
+        auto emp =
+            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
+                                  AttendanceData const *) { return true; });
+
+        if (emp.empty()) {
+          MCR_CNF_LOG("No employees found in the system\n", s);
+          return;
+        }
+
+        s->pushMenuState();
+        s->getInterface()->menu.clear();
+
+        for (auto e : emp) {
+          s->getInterface()->menu.push_back(ShellMenuEntry{
+              .description = formatEmployeeRecord(e), .callback = [s, e]() {
+                std::size_t startYear, startMonth, endYear, endMonth;
+                tu::TimePoint tp;
+                tp.populate();
+
+                if (!readBounded("Enter start year: \n", &startYear, 1970,
+                                 tp.year + 1, s)) {
+                  s->popMenuState();
+                  return;
+                }
+                if (!readBounded("Enter start month: \n", &startMonth, 1, 13,
+                                 s)) {
+                  s->popMenuState();
+                  return;
+                }
+                if (!readBounded("Enter end year: \n", &endYear, 1970,
+                                 tp.year + 1, s)) {
+                  s->popMenuState();
+                  return;
+                }
+                if (!readBounded("Enter end month: \n", &endMonth, 1, 13, s)) {
+                  s->popMenuState();
+                  return;
+                }
+
+                tu::TimePeriod range{.begin = {.year = unsigned(startYear),
+                                               .month = unsigned(startMonth),
+                                               .day = 1,
+                                               .hour = 0,
+                                               .minute = 0},
+                                     .end = {.year = unsigned(endYear),
+                                             .month = unsigned(endMonth),
+                                             .day = 31,
+                                             .hour = 23,
+                                             .minute = 59},
+                                     .type = {}};
+
+                auto records = e->getAttendanceTable().getRecords(range);
+
+                if (records.empty()) {
+                  MCR_CNF_LOG(
+                      "No attendance records found in the given range\n", s);
+                  s->popMenuState();
+                  return;
+                }
+
+                std::string message =
+                    "Attendance records for " + formatEmployeeRecord(e) + ":\n";
+                for (auto const &r : records)
+                  message += "\t" + to_string(r) + "\n";
+
+                MCR_CNF_LOG(message, s);
+                s->popMenuState();
+              }});
+        }
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Back", .callback = [s]() { s->popMenuState(); }});
+
+        s->getInterface()->menu.push_back(ShellMenuEntry{
+            .description = "Exit", .callback = [s]() { s->requestExit(); }});
+      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Calculate employee pay", .callback = [s]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
         auto sys = s->getSystem();
@@ -1076,6 +1158,55 @@ void appendEmployeeMenuEntries(Shell *s) {
             << emp->getEmployeeSurname() << ": " << pay << "\n";
 
         MCR_CNF_LOG(oss.str(), s);
+      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "View attendance", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+        if (!emp) {
+          MCR_CNF_LOG("Error: Employee not found\n", s);
+          return;
+        }
+
+        std::size_t startYear, startMonth, endYear, endMonth;
+        tu::TimePoint tp;
+        tp.populate();
+
+        if (!readBounded("Enter start year: \n", &startYear, 1970, tp.year + 1,
+                         s))
+          return;
+        if (!readBounded("Enter start month: \n", &startMonth, 1, 13, s))
+          return;
+        if (!readBounded("Enter end year: \n", &endYear, 1970, tp.year + 1, s))
+          return;
+        if (!readBounded("Enter end month: \n", &endMonth, 1, 13, s))
+          return;
+
+        tu::TimePeriod range{.begin = {.year = unsigned(startYear),
+                                       .month = unsigned(startMonth),
+                                       .day = 1,
+                                       .hour = 0,
+                                       .minute = 0},
+                             .end = {.year = unsigned(endYear),
+                                     .month = unsigned(endMonth),
+                                     .day = 31,
+                                     .hour = 23,
+                                     .minute = 59},
+                             .type = {}};
+
+        auto records = emp->getAttendanceTable().getRecords(range);
+
+        if (records.empty()) {
+          MCR_CNF_LOG("No attendance records found in the given range\n", s);
+          return;
+        }
+
+        std::string message = "Attendance records:\n";
+        for (auto const &r : records)
+          message += "\t" + to_string(r) + "\n";
+
+        MCR_CNF_LOG(message, s);
       }});
 }
 

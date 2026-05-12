@@ -22,9 +22,6 @@ public:
   // Low level variant; Add time period with no checks to attendance_
   Result addTimePeriod(tu::TimePeriod);
 
-  // Look through attendance_ and calculate hours worked since a specific time
-  Result getHoursWorkedSince(tu::TimePoint const &) const;
-
   // Looks through the records and if it finds an entry matching the
   // day specified in the time point argument then, updates the
   // attendance type to sick. Otherwise, inserts a new record for that day.

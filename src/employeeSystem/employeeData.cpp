@@ -6,10 +6,6 @@ Result AttendanceData::addTimePeriod(tu::TimePeriod p) {
   return Result::Success;
 }
 
-Result AttendanceData::getHoursWorkedSince(tu::TimePoint const &) const {
-  return Result::Success;
-}
-
 Result AttendanceData::setAbsence(tu::TimePoint const &t) {
   for (auto &record : attendance_)
     if (record.begin.year == t.year && record.begin.month == t.month &&

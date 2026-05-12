@@ -15,6 +15,7 @@ add_library(employeeSystem
 	employeeSystem/employeeSystem.cpp
 	employeeSystem/factory.cpp
 	employeeSystem/employeeData.cpp
+	employeeSystem/attendanceTable.cpp
 	employeeSystem/employee.cpp
 	employeeSystem/interactiveCLI.cpp
 	employeeSystem/esResult.cpp

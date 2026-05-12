@@ -1,5 +1,6 @@
 #pragma once
 
+#include <wtts/attendanceTable.hpp>
 #include <wtts/employeeData.hpp>
 #include <wtts/logInfo.hpp>
 
@@ -40,6 +41,10 @@ public:
     return personnel_->getEmployeeCardId();
   }
   std::string getEmployeeId() const { return personnel_->getEmployeeId(); }
+
+  AttendanceTable getAttendanceTable() const {
+    return AttendanceTable{attendance_};
+  }
 
 protected:
   PersonnelData *personnel_;
