@@ -34,6 +34,9 @@ std::string to_string(Result const r) {
   case Result::EmployeeIsCheckedInError:
     out = "EmployeeIsCheckedInError";
     break;
+  case Result::UnknownEmployeeRoleError:
+    out = "UnknownEmployeeRoleError";
+    break;
   }
   return out;
 }

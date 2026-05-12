@@ -26,11 +26,11 @@ void buildEmployeeMenu(Shell *s, bool addJmpToPrev);
 void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
 
-void buildAbsenceEmployeeSelectionMenu(Shell *,
-                                       std::vector<Employee *> const &);
 void buildPaymentListMenu(Shell *, std::vector<Employee *> const &);
 
-void buildSettingsMenu(Shell *s);
+void buildAbsenceEmployeeSelectionMenu(Shell *, std::vector<Employee *> const &,
+                                       GeneralAdmin *admin = nullptr);
+void buildSettingsMenu(Shell *s, Admin *admin = nullptr);
 
 void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
                            std::shared_ptr<PersonnelData> shared = {});

@@ -2,32 +2,87 @@
 #include <wtts/employeeSystem.hpp>
 
 namespace es {
-Result GeneralAdmin::editEmployee(Employee *const e,
-                                  PersonnelData const &newData) {
+Result GeneralAdmin::setAbsence(std::string const &id,
+                                tu::TimePoint const &tp) {
+  auto e = system_->getEmployeeById(id);
   if (!e)
-    return Result::EmployeeIsNullptrError;
+    return Result::EmployeeNotFoundError;
+  return system_->setEmployeeAbsence(e, tp);
+}
+
+Result GeneralAdmin::addEmployee(PersonnelData const &pd) {
+  PersonnelData *new_pd{};
+  AttendanceData *new_ad{};
+  Result result{};
+
+  switch (pd.getEmployeeRole()) {
+  case EmployeeRole::Employee: {
+    Employee *e{};
+    result = system_->addEmployee(&e, &new_pd, &new_ad);
+    break;
+  }
+  case EmployeeRole::Driver: {
+    Driver *e{};
+    result = system_->addEmployee(&e, &new_pd, &new_ad);
+    break;
+  }
+  case EmployeeRole::Manager: {
+    Manager *e{};
+    result = system_->addEmployee(&e, &new_pd, &new_ad);
+    break;
+  }
+  case EmployeeRole::Admin: {
+    Admin *e{};
+    result = system_->addEmployee(&e, &new_pd, &new_ad);
+    break;
+  }
+  default:
+    return Result::UnknownEmployeeRoleError;
+  }
+
+  if (result != Result::Success)
+    return result;
+
+  if (!new_pd)
+    return Result::EmployeeNotFoundError;
+
+  *new_pd = pd;
+  return Result::Success;
+}
+
+Result GeneralAdmin::editEmployee(std::string const &id,
+                                  PersonnelData const &newData) {
+  auto e = system_->getEmployeeById(id);
+  if (!e)
+    return Result::EmployeeNotFoundError;
 
   auto pd = system_->getEmployeeInfo(e);
   if (!pd)
     return Result::EmployeeNotFoundError;
 
-  // Validate: employee ID must not change
   if (pd->getEmployeeId() != newData.getEmployeeId())
     return Result::EmployeeIdNotUniqueError;
 
-  // Apply all fields
-  pd->setEmployeeName(newData.getEmployeeName());
-  pd->setEmployeeSurname(newData.getEmployeeSurname());
-  pd->setEmployeeTelephone(newData.getEmployeeTelephone());
-  pd->setEmployeeEmail(newData.getEmployeeEmail());
-  pd->setEmployeeCardId(newData.getEmployeeCardId());
-  pd->setEmployeeStandardWorkTime(newData.getEmployeeStandardWorkTime());
-  pd->setEmployeeMaxWorkTime(newData.getEmployeeMaxWorkTime());
-  pd->setEmployeeHourlyWage(newData.getEmployeeHourlyWage());
-  pd->setEmployeeRole(newData.getEmployeeRole());
-  pd->setEmployeeActive(newData.getEmployeeActive());
-
+  *pd = newData;
   return Result::Success;
+}
+
+Result Admin::editSettings(SystemSettings setting, unsigned value) {
+  switch (setting) {
+  case SystemSettings::AutoCheckoutHour:
+    system_->setAutoCheckoutTime(value, system_->getAutoCheckoutTime().second);
+    break;
+  case SystemSettings::AutoCheckoutMinute:
+    system_->setAutoCheckoutTime(system_->getAutoCheckoutTime().first, value);
+    break;
+  }
+  return Result::Success;
+}
+
+void Admin::removeEmployee(Employee *const e) {
+  if (!e)
+    return;
+  system_->removeEmployee(e->getEmployeeId());
 }
 
 Result Driver::logDeliveryBegin() {
