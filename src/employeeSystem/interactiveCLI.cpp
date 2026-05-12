@@ -988,13 +988,50 @@ void appendEmployeeMenuEntries(Shell *s) {
 }
 
 void appendDriverMenuEntries(Shell *s) {
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Log beginning of delivery",
-                     .callback = [s]() { s->requestExit(); }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Log beginning of delivery", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+        if (!emp) {
+          MCR_CNF_LOG("Error: Employee not found\n", s);
+          return;
+        }
+        auto driver = dynamic_cast<Driver *>(emp);
+        if (!driver) {
+          MCR_CNF_LOG("Error: Employee is not a driver\n", s);
+          return;
+        }
+        if (auto result = driver->logDeliveryBegin();
+            result != Result::Success) {
+          MCR_CNF_LOG("Could not log delivery begin; Reason: " +
+                          to_string(result) + "\n",
+                      s);
+          return;
+        }
+        MCR_CNF_LOG("Successfully logged beginning of delivery\n", s);
+      }});
 
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Log end of delivery",
-                     .callback = [s]() { s->requestExit(); }});
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Log end of delivery", .callback = [s]() {
+        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
+        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
+        if (!emp) {
+          MCR_CNF_LOG("Error: Employee not found\n", s);
+          return;
+        }
+        auto driver = dynamic_cast<Driver *>(emp);
+        if (!driver) {
+          MCR_CNF_LOG("Error: Employee is not a driver\n", s);
+          return;
+        }
+        if (auto result = driver->logDeliveryEnd(); result != Result::Success) {
+          MCR_CNF_LOG(
+              "Could not log delivery end; Reason: " + to_string(result) + "\n",
+              s);
+          return;
+        }
+        MCR_CNF_LOG("Successfully logged end of delivery\n", s);
+      }});
 }
 
 void buildEmployeeMenu(Shell *s, bool addJmpToPrev) {
