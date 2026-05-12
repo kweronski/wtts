@@ -3,6 +3,44 @@
 #include <wtts/logInfo.hpp>
 
 namespace es {
+Result EmployeeSystem::removeEmployee(std::string const &id) {
+  // Search a container and remove if found; returns true on success
+  auto tryRemove = [&](auto &container) -> bool {
+    for (auto it = container.begin(); it != container.end(); ++it) {
+      if ((*it)->getEmployeeId() == id) {
+        auto *ptr = it->get();
+        attendance_.erase(ptr);
+        personnel_.erase(ptr);
+        container.erase(it);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // First, find the employee and check they are not checked in
+  Employee *found = getEmployeeById(id);
+  if (!found)
+    return Result::EmployeeNotFoundError;
+
+  auto it = attendance_.find(found);
+  if (it != attendance_.end() && it->second) {
+    if (it->second->getCurrentTimePeriod()->begin.year) // checked in
+      return Result::EmployeeIsCheckedInError;
+  }
+
+  if (tryRemove(employees_))
+    return Result::Success;
+  if (tryRemove(drivers_))
+    return Result::Success;
+  if (tryRemove(managers_))
+    return Result::Success;
+  if (tryRemove(admins_))
+    return Result::Success;
+
+  return Result::EmployeeNotFoundError;
+}
+
 Result EmployeeSystem::setEmployeeAbsence(Employee *e, tu::TimePoint const &t) {
   AttendanceData *a;
 

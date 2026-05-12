@@ -52,6 +52,24 @@ public:
 
   Result setEmployeeAbsence(Employee *, tu::TimePoint const &);
 
+  AttendanceData *getEmployeeAttendance(Employee *e) {
+    try {
+      return attendance_.at(e).get();
+    } catch (...) {
+      return 0;
+    }
+  }
+
+  PersonnelData *getEmployeeInfo(Employee *e) {
+    try {
+      return personnel_.at(e).get();
+    } catch (...) {
+      return 0;
+    }
+  }
+
+  Result removeEmployee(std::string const &id);
+
 private:
   std::set<std::unique_ptr<Employee>> employees_;
   std::set<std::unique_ptr<Driver>> drivers_;

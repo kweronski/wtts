@@ -22,12 +22,18 @@ void buildAdminMenu(Shell *s, bool addJmpToPrev);
 void buildManagerMenu(Shell *s, bool addJmpToPrev);
 void buildDriverMenu(Shell *s, bool addJmpToPrev);
 void buildEmployeeMenu(Shell *s, bool addJmpToPrev);
+
 void buildEmployeeSelectionMenu(
     Shell *, std::vector<std::pair<std::string, Employee *>> const &);
+
 void buildAbsenceEmployeeSelectionMenu(Shell *,
                                        std::vector<Employee *> const &);
 void buildPaymentListMenu(Shell *, std::vector<Employee *> const &);
+
 void buildSettingsMenu(Shell *s);
+
+void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
+                           std::shared_ptr<PersonnelData> shared = {});
 
 // All menu entry appending functions do not clear the existing menu
 void appendGeneralAdminMenuEntries(Shell *s);
