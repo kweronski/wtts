@@ -137,6 +137,13 @@ diagrams:
     start_from:
       - function: "es::GeneralAdmin::editEmployee(const std::string &,const PersonnelData &)"
 
+  seq_generalAdmin_generatePaymentList:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::GeneralAdmin::generatePaymentList(const tu::TimePeriod &)"
+
   # -----------------------------------------------------------------------
   # Sequence diagrams — Admin
   # -----------------------------------------------------------------------
