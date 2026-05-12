@@ -101,13 +101,23 @@ static GeneralAdmin *resolveAdmin(Shell *s) {
 }
 
 std::string formatEmployeeRecord(Employee const *e) {
-  return e->getEmployeeName() + " " + e->getEmployeeSurname() +
-         " ID: " + e->getEmployeeId() + " (" + to_string(e->getEmployeeRole()) +
-         ")";
+  return e->getEmployeeName() + " " + e->getEmployeeSurname() + " (" +
+         e->getEmployeeId() + ") (" + to_string(e->getEmployeeRole()) + ")";
 }
 
 std::string formatEmployeeRecord(std::size_t index, Employee const *e) {
   return std::to_string(index) + ". " + formatEmployeeRecord(e);
+}
+
+// Returns the prompt string appropriate for the current shell state.
+static std::string buildPromptText(Shell *s) {
+  auto const &id = s->getCurrentEmployeeId();
+  if (id.empty())
+    return "(Admin)> ";
+  auto emp = s->getSystem()->getEmployeeById(id);
+  if (!emp)
+    return "(Admin)> ";
+  return formatEmployeeRecord(emp) + "> ";
 }
 
 void Shell::greet() {
@@ -815,10 +825,6 @@ void buildEmployeeSelectionMenu(
             buildManagerMenu(s, true);
             break;
           }
-
-          s->setPromptText(e.second->getEmployeeName() + " " +
-                           e.second->getEmployeeSurname() + " (" +
-                           to_string(e.second->getEmployeeRole()) + ")> ");
         }});
   }
 
@@ -1131,6 +1137,8 @@ void buildEmployeeMenu(Shell *s, bool addJmpToPrev) {
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  s->setPromptText(buildPromptText(s));
 }
 
 void buildDriverMenu(Shell *s, bool addJmpToPrev) {
@@ -1145,6 +1153,8 @@ void buildDriverMenu(Shell *s, bool addJmpToPrev) {
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  s->setPromptText(buildPromptText(s));
 }
 
 void buildManagerMenu(Shell *s, bool addJmpToPrev) {
@@ -1160,6 +1170,8 @@ void buildManagerMenu(Shell *s, bool addJmpToPrev) {
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  s->setPromptText(buildPromptText(s));
 }
 
 void buildAdminMenu(Shell *s, bool addJmpToPrev) {
@@ -1176,6 +1188,8 @@ void buildAdminMenu(Shell *s, bool addJmpToPrev) {
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
+
+  s->setPromptText(buildPromptText(s));
 }
 
 void buildMainMenu(Shell *s) {
