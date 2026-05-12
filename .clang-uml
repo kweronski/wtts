@@ -1,16 +1,348 @@
 compilation_database_dir: ./build
-
 output_directory: ./build/diagrams
 
 diagrams:
-  overview:
-    type: class
 
+  # -----------------------------------------------------------------------
+  # Class diagrams
+  # -----------------------------------------------------------------------
+
+  employee_model:
+    type: class
     glob:
       - src/**/*.cpp
-
     include:
-      namespaces:
-        - dp
-        - es
-        - tu
+      elements:
+        - es::Employee
+        - es::Driver
+        - es::Manager
+        - es::Admin
+        - es::GeneralAdmin
+        - es::EmployeeSystem
+        - es::SystemSettings
+
+  data_layer:
+    type: class
+    glob:
+      - src/**/*.cpp
+    include:
+      elements:
+        - dp::DataParser
+        - dp::XMLDataParser
+        - es::EmployeeSystemFactory
+        - es::PersonnelData
+        - es::AttendanceData
+        - es::AttendanceTable
+
+  shell:
+    type: class
+    glob:
+      - src/**/*.cpp
+    include:
+      elements:
+        - es::Shell
+        - es::MenuState
+        - es::UserInterface
+        - es::ShellMenuEntry
+
+  overview:
+    type: class
+    glob:
+      - src/**/*.cpp
+    include:
+      elements:
+        - es::Employee
+        - es::Driver
+        - es::Manager
+        - es::Admin
+        - es::GeneralAdmin
+        - es::EmployeeSystem
+        - es::SystemSettings
+        - dp::DataParser
+        - dp::XMLDataParser
+        - es::EmployeeSystemFactory
+        - es::PersonnelData
+        - es::AttendanceData
+        - es::AttendanceTable
+        - es::Shell
+        - es::MenuState
+        - es::UserInterface
+        - es::ShellMenuEntry
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — Employee
+  # -----------------------------------------------------------------------
+
+  seq_employee_checkIn:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Employee::checkIn()"
+
+  seq_employee_checkOut:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Employee::checkOut()"
+
+  seq_employee_calculatePay:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Employee::calculatePay(const tu::TimePoint &) const"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — Driver
+  # -----------------------------------------------------------------------
+
+  seq_driver_logDeliveryBegin:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Driver::logDeliveryBegin()"
+
+  seq_driver_logDeliveryEnd:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Driver::logDeliveryEnd()"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — GeneralAdmin
+  # -----------------------------------------------------------------------
+
+  seq_generalAdmin_setAbsence:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::GeneralAdmin::setAbsence(const std::string &,const tu::TimePoint &)"
+
+  seq_generalAdmin_addEmployee:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::GeneralAdmin::addEmployee(const PersonnelData &)"
+
+  seq_generalAdmin_editEmployee:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::GeneralAdmin::editEmployee(const std::string &,const PersonnelData &)"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — Admin
+  # -----------------------------------------------------------------------
+
+  seq_admin_editSettings:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Admin::editSettings(SystemSettings,unsigned int)"
+
+  seq_admin_removeEmployee:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Admin::removeEmployee(Employee *const)"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — EmployeeSystem
+  # -----------------------------------------------------------------------
+
+  seq_employeeSystem_addEmployee_asEmployee:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::addEmployee(Employee **const,PersonnelData **const,AttendanceData **const)"
+
+  seq_employeeSystem_addEmployee_asDriver:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::addEmployee(Driver **const,PersonnelData **const,AttendanceData **const)"
+
+  seq_employeeSystem_addEmployee_asManager:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::addEmployee(Manager **const,PersonnelData **const,AttendanceData **const)"
+
+  seq_employeeSystem_addEmployee_asAdmin:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::addEmployee(Admin **const,PersonnelData **const,AttendanceData **const)"
+
+  seq_employeeSystem_autoCheckOut:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::autoCheckOut()"
+
+  seq_employeeSystem_getEmployeeById:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::getEmployeeById(const std::string &) const"
+
+  seq_employeeSystem_getEmployeeByName:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::getEmployeeByName(const std::string &,const std::string &) const"
+
+  seq_employeeSystem_getEmployeeBy:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::getEmployeeBy(Predicate)"
+
+  seq_employeeSystem_setEmployeeAbsence:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::setEmployeeAbsence(Employee *,const tu::TimePoint &)"
+
+  seq_employeeSystem_removeEmployee:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::removeEmployee(const std::string &)"
+
+  seq_employeeSystem_printData:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystem::printData(Employee *const,bool) const"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — EmployeeSystemFactory
+  # -----------------------------------------------------------------------
+
+  seq_employeeSystemFactory_create:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::EmployeeSystemFactory::create(dp::DataParser *)"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — AttendanceData
+  # -----------------------------------------------------------------------
+
+  seq_attendanceData_addTimePeriod:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::AttendanceData::addTimePeriod(tu::TimePeriod)"
+
+  seq_attendanceData_setAbsence:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::AttendanceData::setAbsence(const tu::TimePoint &)"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — AttendanceTable
+  # -----------------------------------------------------------------------
+
+  seq_attendanceTable_getRecords:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::AttendanceTable::getRecords(const tu::TimePeriod &) const"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — XMLDataParser
+  # -----------------------------------------------------------------------
+
+  seq_xmlDataParser_loadData:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "dp::XMLDataParser::loadData()"
+
+  # -----------------------------------------------------------------------
+  # Sequence diagrams — Shell
+  # -----------------------------------------------------------------------
+
+  seq_shell_run:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::run()"
+
+  seq_shell_greet:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::greet()"
+
+  seq_shell_renderUserInterface:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::renderUserInterface()"
+
+  seq_shell_readLine:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::readLine()"
+
+  seq_shell_handleInput:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::handleInput()"
+
+  seq_shell_autoCheckout:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::autoCheckout()"
+
+  seq_shell_pushMenuState:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::pushMenuState()"
+
+  seq_shell_popMenuState:
+    type: sequence
+    glob:
+      - src/**/*.cpp
+    start_from:
+      - function: "es::Shell::popMenuState()"
