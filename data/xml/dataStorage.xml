@@ -72,6 +72,12 @@
 				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
 				<end year="2026" month="4" day="2" hour="16" minute="0"/>
 			</instance>
+
+			<instance>
+				<type value="work"/>
+				<begin year="2026" month="4" day="3" hour="8" minute="0"/>
+				<end year="2026" month="4" day="3" hour="16" minute="0"/>
+			</instance>
 		</attendance>
 	</employee>
 
@@ -106,7 +112,7 @@
 			</instance>
 
 			<instance>
-				<type value="work"/>
+				<type value="vacation"/>
 				<begin year="2026" month="4" day="2" hour="8" minute="0"/>
 				<end year="2026" month="4" day="2" hour="16" minute="0"/>
 			</instance>

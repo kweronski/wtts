@@ -58,6 +58,10 @@ bool operator>=(const TimePoint &lhs, const TimePoint &rhs) {
   return lhs.minute >= rhs.minute;
 }
 
+bool operator<(const TimePoint &lhs, const TimePoint &rhs) {
+  return !(lhs >= rhs);
+}
+
 std::time_t to_time_t(const TimePoint &tp) {
   std::tm tm{};
   tm.tm_year = tp.year - 1900;

@@ -518,7 +518,7 @@ void appendGeneralAdminMenuEntries(Shell *s) {
                                   AttendanceData const *ad) {
               if (pd->getEmployeeActive()) {
                 for (auto ad_i : ad->getRecords()) {
-                  if (to_string(ad_i.type) == "Work")
+                  if (ad_i.type == tu::AttendanceType::Work)
                     return true;
                 }
               }
@@ -635,35 +635,23 @@ void buildPaymentListMenu(Shell *s, std::vector<Employee *> const &emp) {
       .day = (unsigned int)daysInMonth((unsigned int)year, (unsigned int)month),
       .hour = (unsigned int)23,
       .minute = (unsigned int)59};
+  tPd.type = tu::AttendanceType::Work;
 
-  std::string message = "\n\t\t\tPayment list,\t\t" + std::to_string(year) +
-                        "-" + std::format("{:02}", month) +
+  std::string message = "\n\tPayment list,\t" + std::to_string(year) + "-" +
+                        std::format("{:02}", month) +
                         " \n\tNo  "
-                        "ID\t\tName\t\t\t\t\tSum[PLN]\t\tTime[hh]\n";
-
+                        "ID\t\tName\t\tSum[PLN]\n";
+  double totalWorkerPay = 0;
   for (std::size_t i = 0; i < emp.size(); ++i) {
     auto const employee = emp[i];
-
-    //    auto attendance = attendance_.at(employee).get();
-    //  printEmployeeData(p, attendance);
-    //   for (auto ad_i : employee->attendance_.begin {
-    //   auto emp =
-    //     sys->getEmployeeBy([](Employee const *, PersonnelData const *pd,
-    //                         AttendanceData const *ad) {
-    //   if (pd->getEmployeeActive()) {
-    //   for (auto ad_i : ad->getRecords()) {
-    //   if (to_string(ad_i.type) == "Work")
-    //   return true;
-    // }
-    //   }
-    // });
-    // }
-    message += "\t" + std::to_string(i + 1) + "." + " (" +
-               employee->getEmployeeId() + ") " + "  " +
-               employee->getEmployeeName() + " " +
-               employee->getEmployeeSurname() + "\n";
+    auto sum = employee->calculatePay(tPd);
+    totalWorkerPay += sum;
+    message +=
+        "\t" + std::to_string(i + 1) + "." + " (" + employee->getEmployeeId() +
+        ") " + "  " + employee->getEmployeeName() + " " +
+        employee->getEmployeeSurname() + "\t\t" + std::to_string(sum) + "\n";
   }
-
+  message += "\n\tTotal worker cost: " + std::to_string(totalWorkerPay) + "\n";
   MCR_CNF_LOG(message, s);
 
   s->popMenuState();
@@ -983,6 +971,11 @@ void appendAdminMenuEntries(Shell *s) {
                   return;
                 }
 
+                std::string removeMessage =
+                    "Successfully removed employee: " + e->getEmployeeName() +
+                    " " + e->getEmployeeSurname() +
+                    " ID: " + e->getEmployeeId() + "\n";
+
                 if (!s->getCurrentEmployeeId().empty()) {
                   auto activeEmp =
                       sys->getEmployeeById(s->getCurrentEmployeeId());
@@ -1006,11 +999,7 @@ void appendAdminMenuEntries(Shell *s) {
                   }
                 }
 
-                MCR_CNF_LOG(
-                    "Successfully removed employee: " + e->getEmployeeName() +
-                        " " + e->getEmployeeSurname() +
-                        " ID: " + e->getEmployeeId() + "\n",
-                    s);
+                MCR_CNF_LOG(removeMessage, s);
                 s->popMenuState();
               }});
         }
