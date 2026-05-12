@@ -67,6 +67,26 @@ Result GeneralAdmin::editEmployee(std::string const &id,
   return Result::Success;
 }
 
+std::vector<PaymentRecord>
+GeneralAdmin::generatePaymentList(tu::TimePeriod const &period) {
+  auto employees = system_->getEmployeeBy(
+      [](Employee const *, PersonnelData const *pd, AttendanceData const *ad) {
+        if (!pd->getEmployeeActive())
+          return false;
+        for (auto const &r : ad->getRecords()) {
+          if (r.type == tu::AttendanceType::Work)
+            return true;
+        }
+        return false;
+      });
+
+  std::vector<PaymentRecord> result;
+  result.reserve(employees.size());
+  for (auto *e : employees)
+    result.push_back({.recipient = e, .value = e->calculatePay(period)});
+  return result;
+}
+
 Result Admin::editSettings(SystemSettings setting, unsigned value) {
   switch (setting) {
   case SystemSettings::AutoCheckoutHour:

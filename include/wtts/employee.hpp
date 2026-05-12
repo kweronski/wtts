@@ -53,6 +53,11 @@ protected:
   AttendanceData *attendance_;
 };
 
+struct PaymentRecord {
+  Employee *recipient;
+  double value;
+};
+
 class Driver : public Employee {
 public:
   Driver(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
@@ -70,6 +75,7 @@ public:
   Result setAbsence(std::string const &id, tu::TimePoint const &);
   Result addEmployee(PersonnelData const &);
   Result editEmployee(std::string const &id, PersonnelData const &newData);
+  std::vector<PaymentRecord> generatePaymentList(tu::TimePeriod const &period);
 
 protected:
   EmployeeSystem *system_;

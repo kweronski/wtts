@@ -604,21 +604,25 @@ void appendGeneralAdminMenuEntries(Shell *s) {
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Print payment list", .callback = [s]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *pd,
-                                  AttendanceData const *ad) {
-              if (pd->getEmployeeActive()) {
-                for (auto ad_i : ad->getRecords()) {
-                  if (ad_i.type == tu::AttendanceType::Work)
-                    return true;
-                }
-              }
-              return false;
-            });
-
+        auto *admin = resolveAdmin(s);
         s->pushMenuState();
-        buildPaymentListMenu(s, emp);
+        if (admin) {
+          buildPaymentListMenu(s, admin);
+        } else {
+          auto sys = s->getSystem();
+          auto emp =
+              sys->getEmployeeBy([](Employee const *, PersonnelData const *pd,
+                                    AttendanceData const *ad) {
+                if (pd->getEmployeeActive()) {
+                  for (auto const &ad_i : ad->getRecords()) {
+                    if (ad_i.type == tu::AttendanceType::Work)
+                      return true;
+                  }
+                }
+                return false;
+              });
+          buildPaymentListMenu(s, emp);
+        }
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
@@ -697,6 +701,57 @@ unsigned int daysInMonth(unsigned int const year, unsigned int const month) {
   default:
     return -1; // invalid month
   }
+}
+
+void buildPaymentListMenu(Shell *s, GeneralAdmin *admin) {
+  s->getInterface()->menu.clear();
+
+  std::size_t year, month;
+  tu::TimePoint tPt;
+  tu::TimePeriod tPd;
+  tPt.populate();
+
+  if (!readBounded("Enter period year: \n", &year, tPt.year, tPt.year + 1, s)) {
+    s->popMenuState();
+    return;
+  }
+  if (!readBounded("Enter period month: \n", &month, 1, 13, s)) {
+    s->popMenuState();
+    return;
+  }
+  tPd.begin = {.year = (unsigned int)year,
+               .month = (unsigned int)month,
+               .day = (unsigned int)1,
+               .hour = (unsigned int)0,
+               .minute = (unsigned int)0};
+  tPd.end = {
+      .year = (unsigned int)year,
+      .month = (unsigned int)month,
+      .day = (unsigned int)daysInMonth((unsigned int)year, (unsigned int)month),
+      .hour = (unsigned int)23,
+      .minute = (unsigned int)59};
+  tPd.type = tu::AttendanceType::Work;
+
+  auto records = admin->generatePaymentList(tPd);
+
+  std::string message = "\n\tPayment list,\t" + std::to_string(year) + "-" +
+                        std::format("{:02}", month) +
+                        " \n\tNo  "
+                        "ID\t\tName\t\tSum[PLN]\n";
+  double totalWorkerPay = 0;
+  for (std::size_t i = 0; i < records.size(); ++i) {
+    auto const *employee = records[i].recipient;
+    auto const sum = records[i].value;
+    totalWorkerPay += sum;
+    message +=
+        "\t" + std::to_string(i + 1) + "." + " (" + employee->getEmployeeId() +
+        ") " + "  " + employee->getEmployeeName() + " " +
+        employee->getEmployeeSurname() + "\t\t" + std::to_string(sum) + "\n";
+  }
+  message += "\n\tTotal worker cost: " + std::to_string(totalWorkerPay) + "\n";
+  MCR_CNF_LOG(message, s);
+
+  s->popMenuState();
 }
 
 void buildPaymentListMenu(Shell *s, std::vector<Employee *> const &emp) {

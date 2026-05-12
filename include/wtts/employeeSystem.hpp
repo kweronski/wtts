@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <vector>
 #include <wtts/employee.hpp>
-#include <wtts/paymentList.hpp>
 
 namespace es {
 class EmployeeSystem {
