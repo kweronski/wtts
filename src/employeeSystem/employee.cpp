@@ -2,6 +2,18 @@
 #include <wtts/employeeSystem.hpp>
 
 namespace es {
+void Employee::updateCurrentTimePeriodBegin(tu::TimePoint tp) {
+  attendance_->getCurrentTimePeriod()->begin = std::move(tp);
+}
+
+void Employee::updateCurrentTimePeriodEnd(tu::TimePoint tp,
+                                          tu::AttendanceType at) {
+  attendance_->getCurrentTimePeriod()->end = std::move(tp);
+  attendance_->getCurrentTimePeriod()->type = at;
+  attendance_->addTimePeriod(std::move(*attendance_->getCurrentTimePeriod()));
+  *attendance_->getCurrentTimePeriod() = {};
+}
+
 Result GeneralAdmin::setAbsence(std::string const &id,
                                 tu::TimePoint const &tp) {
   auto e = system_->getEmployeeById(id);
@@ -138,8 +150,8 @@ Result Employee::checkIn() {
 
   tu::TimePoint tp;
   tp.populate();
-  attendance_->getCurrentTimePeriod()->begin = std::move(tp);
 
+  updateCurrentTimePeriodBegin(std::move(tp));
   return Result::Success;
 }
 
@@ -149,11 +161,8 @@ Result Employee::checkOut() {
 
   tu::TimePoint tp;
   tp.populate();
-  attendance_->getCurrentTimePeriod()->end = std::move(tp);
-  attendance_->getCurrentTimePeriod()->type = tu::AttendanceType::Work;
 
-  attendance_->addTimePeriod(std::move(*attendance_->getCurrentTimePeriod()));
-  *attendance_->getCurrentTimePeriod() = {};
+  updateCurrentTimePeriodEnd(std::move(tp), tu::AttendanceType::Work);
   return Result::Success;
 }
 
