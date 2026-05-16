@@ -2,6 +2,20 @@
 #include <wtts/employeeSystem.hpp>
 
 namespace es {
+Result GeneralAdmin::generatePayrollReport(std::string const &id, std::string const &filepath) {
+  auto e = system_->getEmployeeById(id);
+  if (!e)
+    return Result::EmployeeNotFoundError;
+
+  PersonnelData *pd{};
+  AttendanceData *ad{};
+
+  Result res = system_->getEmployeeData(&e, &pd, &ad);
+  if (res != Result::Success)
+    return res;
+
+  return pdfReportGenerator::generatePayrollReport(filepath, pd, ad);
+}
 Result GeneralAdmin::setAbsence(std::string const &id,
                                 tu::TimePoint const &tp) {
   auto e = system_->getEmployeeById(id);

@@ -11,6 +11,8 @@ add_library(dataparser
 )
 target_link_libraries(dataparser PRIVATE pugixml::pugixml)
 
+
+
 add_library(employeeSystem
 	employeeSystem/employeeSystem.cpp
 	employeeSystem/factory.cpp
@@ -19,8 +21,9 @@ add_library(employeeSystem
 	employeeSystem/employee.cpp
 	employeeSystem/interactiveCLI.cpp
         employeeSystem/esResult.cpp
-	logInfo.cpp)
-target_link_libraries(employeeSystem PRIVATE dataparser)
+	logInfo.cpp
+		employeeSystem/pdfReportGenerator.cpp)
+target_link_libraries(employeeSystem PRIVATE dataparser ${HARU_LIBRARY})
 
 add_executable(wttsapp main.cpp)
 target_link_libraries(wttsapp PRIVATE employeeSystem -lpthread)

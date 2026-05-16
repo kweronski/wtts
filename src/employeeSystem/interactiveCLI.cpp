@@ -626,6 +626,34 @@ void appendGeneralAdminMenuEntries(Shell *s) {
       }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Generuj raport płacowy (PDF)",
+      .callback = [s]() {
+          s->setInputInstruction("Podaj ID pracownika: ");
+          std::string employeeId = s->readLine();
+          if (employeeId.empty()) return;
+
+          s->setInputInstruction("Podaj nazwe pliku zapisu (np. raport.pdf): ");
+          std::string filePath = s->readLine();
+          if (filePath.empty()) {
+              filePath = "raport_" + employeeId + "_2026.pdf"; // Domyślna nazwa
+          }
+
+          try {
+              es::GeneralAdmin admin(s->getSystem());
+              es::Result result = admin.generatePayrollReport(employeeId, filePath);
+
+              if (result == es::Result::Success) {
+                  MCR_CNF_LOG("Sukces: Raport PDF został wygenerowany -> " + filePath + "\n", s);
+              } else {
+                  MCR_CNF_LOG("Błąd: Nie udało się wygenerować raportu. Kod błędu: " + es::to_string(result) + "\n", s);
+              }
+          } catch (const std::exception& e) {
+              MCR_CNF_LOG("Błąd krytyczny: " + std::string(e.what()) + "\n", s);
+          }
+      }
+  });
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "List checked-in employees", .callback = [s]() {
         std::lock_guard<std::mutex> lock{s->getSystemGuard()};
         auto sys = s->getSystem();
