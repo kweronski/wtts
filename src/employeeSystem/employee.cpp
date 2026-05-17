@@ -14,6 +14,19 @@ void Employee::updateCurrentTimePeriodEnd(tu::TimePoint tp,
   *attendance_->getCurrentTimePeriod() = {};
 }
 
+void Driver::updateCurrentDeliveryTimePeriodBegin(tu::TimePoint tp) {
+  attendance_->getCurrentDeliveryTimePeriod()->begin = std::move(tp);
+}
+
+void Driver::updateCurrentDeliveryTimePeriodEnd(tu::TimePoint tp,
+                                                tu::AttendanceType at) {
+  attendance_->getCurrentDeliveryTimePeriod()->end = std::move(tp);
+  attendance_->getCurrentDeliveryTimePeriod()->type = at;
+  attendance_->addTimePeriod(
+      std::move(*attendance_->getCurrentDeliveryTimePeriod()));
+  *attendance_->getCurrentDeliveryTimePeriod() = {};
+}
+
 Result GeneralAdmin::setAbsence(std::string const &id,
                                 tu::TimePoint const &tp) {
   auto e = system_->getEmployeeById(id);
@@ -123,8 +136,8 @@ Result Driver::logDeliveryBegin() {
 
   tu::TimePoint tp;
   tp.populate();
-  attendance_->getCurrentDeliveryTimePeriod()->begin = std::move(tp);
 
+  updateCurrentDeliveryTimePeriodBegin(tp);
   return Result::Success;
 }
 
@@ -134,13 +147,8 @@ Result Driver::logDeliveryEnd() {
 
   tu::TimePoint tp;
   tp.populate();
-  attendance_->getCurrentDeliveryTimePeriod()->end = std::move(tp);
-  attendance_->getCurrentDeliveryTimePeriod()->type =
-      tu::AttendanceType::Delivery;
 
-  attendance_->addTimePeriod(
-      std::move(*attendance_->getCurrentDeliveryTimePeriod()));
-  *attendance_->getCurrentDeliveryTimePeriod() = {};
+  updateCurrentDeliveryTimePeriodEnd(tp, tu::AttendanceType::Delivery);
   return Result::Success;
 }
 

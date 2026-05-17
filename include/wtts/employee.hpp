@@ -79,8 +79,12 @@ public:
   Driver(PersonnelData *p, AttendanceData *a) : Employee(p, a) {}
 
   Result logDeliveryBegin();
-
   Result logDeliveryEnd();
+
+private:
+  void updateCurrentDeliveryTimePeriodBegin(tu::TimePoint tp);
+  void updateCurrentDeliveryTimePeriodEnd(tu::TimePoint tp,
+                                          tu::AttendanceType at);
 };
 
 class EmployeeSystem;
