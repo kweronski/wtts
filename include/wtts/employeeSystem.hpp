@@ -69,6 +69,20 @@ public:
 
   Result removeEmployee(std::string const &id);
 
+  bool tryRemoveEmployee(auto &container, std::string const &id) {
+    // Search a container and remove if found; returns true on success
+    for (auto it = container.begin(); it != container.end(); ++it) {
+      if ((*it)->getEmployeeId() == id) {
+        auto *ptr = it->get();
+        attendance_.erase(ptr);
+        personnel_.erase(ptr);
+        container.erase(it);
+        return true;
+      }
+    }
+    return false;
+  };
+
 private:
   std::set<std::unique_ptr<Employee>> employees_;
   std::set<std::unique_ptr<Driver>> drivers_;

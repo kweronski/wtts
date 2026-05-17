@@ -4,20 +4,6 @@
 
 namespace es {
 Result EmployeeSystem::removeEmployee(std::string const &id) {
-  // Search a container and remove if found; returns true on success
-  auto tryRemove = [&](auto &container) -> bool {
-    for (auto it = container.begin(); it != container.end(); ++it) {
-      if ((*it)->getEmployeeId() == id) {
-        auto *ptr = it->get();
-        attendance_.erase(ptr);
-        personnel_.erase(ptr);
-        container.erase(it);
-        return true;
-      }
-    }
-    return false;
-  };
-
   // First, find the employee and check they are not checked in
   Employee *found = getEmployeeById(id);
   if (!found)
@@ -29,13 +15,13 @@ Result EmployeeSystem::removeEmployee(std::string const &id) {
       return Result::EmployeeIsCheckedInError;
   }
 
-  if (tryRemove(employees_))
+  if (tryRemoveEmployee(employees_, id))
     return Result::Success;
-  if (tryRemove(drivers_))
+  if (tryRemoveEmployee(employees_, id))
     return Result::Success;
-  if (tryRemove(managers_))
+  if (tryRemoveEmployee(drivers_, id))
     return Result::Success;
-  if (tryRemove(admins_))
+  if (tryRemoveEmployee(admins_, id))
     return Result::Success;
 
   return Result::EmployeeNotFoundError;
