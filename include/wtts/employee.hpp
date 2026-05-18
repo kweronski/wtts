@@ -66,7 +66,17 @@ protected:
 
 private:
   void updateCurrentTimePeriodBegin(tu::TimePoint);
+
   void updateCurrentTimePeriodEnd(tu::TimePoint, tu::AttendanceType);
+
+  bool recordQualifiesForPayment(tu::TimePoint const &offset,
+                                 tu::TimePoint const &tp,
+                                 tu::AttendanceType const type) const;
+
+  bool recordQualifiesForPayment(tu::TimePeriod const &interval,
+                                 tu::TimePeriod const &tp) const;
+
+  void updateTotalPay(tu::TimePeriod const &period, double &total) const;
 };
 
 struct PaymentRecord {

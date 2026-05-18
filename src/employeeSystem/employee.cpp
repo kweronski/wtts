@@ -174,38 +174,42 @@ Result Employee::checkOut() {
   return Result::Success;
 }
 
-double Employee::calculatePay(tu::TimePoint const &start) const {
+bool Employee::recordQualifiesForPayment(tu::TimePoint const &offset,
+                                         tu::TimePoint const &tp,
+                                         tu::AttendanceType const type) const {
+  return tp >= offset && (type == tu::AttendanceType::Work ||
+                          type == tu::AttendanceType::Delivery);
+}
+
+bool Employee::recordQualifiesForPayment(tu::TimePeriod const &interval,
+                                         tu::TimePeriod const &tp) const {
+  return tp.begin >= interval.begin && tp.end < interval.end &&
+         tp.type == interval.type;
+}
+
+void Employee::updateTotalPay(tu::TimePeriod const &period,
+                              double &total) const {
   auto const hourlyWage = this->getEmployeeHourlyWage();
   auto const minuteWage = double(hourlyWage) / 60.0;
+  total += (period.end - period.begin) * minuteWage;
+}
 
+double Employee::calculatePay(tu::TimePoint const &start) const {
   double total{};
 
-  for (auto const &p : attendance_->getRecords()) {
-    if (!(p.begin >= start) || (p.type != tu::AttendanceType::Work &&
-                                p.type != tu::AttendanceType::Delivery))
-      continue;
-
-    auto minutes = p.end - p.begin;
-    total += minutes * minuteWage;
-  }
+  for (auto const &p : attendance_->getRecords())
+    if (recordQualifiesForPayment(start, p.begin, p.type))
+      updateTotalPay(p, total);
 
   return total;
 }
 
 double Employee::calculatePay(tu::TimePeriod const &period) const {
-  auto const hourlyWage = this->getEmployeeHourlyWage();
-  auto const minuteWage = double(hourlyWage) / 60.0;
   double total{};
 
-  for (auto const &p : attendance_->getRecords()) {
-    bool rangeBeginNOK = !(p.begin >= period.begin);
-    bool rangeEndNOK = period.end < p.end;
-    if (rangeBeginNOK || rangeEndNOK || p.type != period.type)
-      continue;
-
-    auto minutes = p.end - p.begin;
-    total += minutes * minuteWage;
-  }
+  for (auto const &p : attendance_->getRecords())
+    if (recordQualifiesForPayment(period, p))
+      updateTotalPay(p, total);
 
   return total;
 }
