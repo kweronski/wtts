@@ -17,7 +17,7 @@ Result EmployeeSystem::removeEmployee(std::string const &id) {
 
   if (tryRemoveEmployee(employees_, id))
     return Result::Success;
-  if (tryRemoveEmployee(employees_, id))
+  if (tryRemoveEmployee(managers_, id))
     return Result::Success;
   if (tryRemoveEmployee(drivers_, id))
     return Result::Success;
