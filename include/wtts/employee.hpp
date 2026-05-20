@@ -2,7 +2,6 @@
 
 #include <wtts/attendanceTable.hpp>
 #include <wtts/employeeData.hpp>
-#include <wtts/logInfo.hpp>
 
 namespace es {
 class Employee {
@@ -112,6 +111,8 @@ public:
   Result editEmployee(std::string const &id, PersonnelData const &newData);
 
   std::vector<PaymentRecord> generatePaymentList(tu::TimePeriod const &period);
+
+  void updatePersonnelData(PersonnelData const &, PersonnelData *);
 
 protected:
   EmployeeSystem *system_;

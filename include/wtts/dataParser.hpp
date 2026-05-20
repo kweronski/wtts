@@ -2,7 +2,6 @@
 #include <string>
 #include <vector>
 #include <wtts/employeeData.hpp>
-#include <wtts/logInfo.hpp>
 
 namespace dp {
 enum class Result {

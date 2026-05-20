@@ -42,8 +42,6 @@ EmployeeSystemFactory::create(dp::DataParser *parser) {
                          dp::EmployeeStatus::Active);
     p->setEmployeeName(parser->getEmployeeName(id));
     p->setEmployeeSurname(parser->getEmployeeSurname(id));
-    p->setEmployeeName(parser->getEmployeeName(id));
-    p->setEmployeeSurname(parser->getEmployeeSurname(id));
     p->setEmployeeTelephone(parser->getEmployeeTelephone(id));
     p->setEmployeeEmail(parser->getEmployeeEmail(id));
     p->setEmployeeStandardWorkTime(parser->getEmployeeStandardWorkTime(id));

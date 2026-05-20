@@ -1,6 +1,5 @@
 #include <iostream>
 #include <wtts/employeeSystem.hpp>
-#include <wtts/logInfo.hpp>
 
 namespace es {
 Result EmployeeSystem::removeEmployee(std::string const &id) {
