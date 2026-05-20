@@ -1,7 +1,5 @@
 #include <pugixml.hpp>
-#include <wtts/logInfo.hpp>
 #include <wtts/xmlParser.hpp>
-
 #include "internals.hpp"
 
 namespace dp {

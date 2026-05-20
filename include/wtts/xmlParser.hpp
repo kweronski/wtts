@@ -1,7 +1,6 @@
 #pragma once
 #include <memory>
 #include <wtts/dataParser.hpp>
-#include <wtts/logInfo.hpp>
 
 namespace pugi {
 class xml_document;

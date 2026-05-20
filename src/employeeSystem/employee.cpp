@@ -71,8 +71,15 @@ Result GeneralAdmin::addEmployee(PersonnelData const &pd) {
   if (!new_pd)
     return Result::EmployeeNotFoundError;
 
-  *new_pd = pd;
+  updatePersonnelData(pd, new_pd);
+
   return Result::Success;
+}
+
+void GeneralAdmin::updatePersonnelData(PersonnelData const &newData,
+                                       PersonnelData *oldData) {
+
+  *oldData = newData;
 }
 
 Result GeneralAdmin::editEmployee(std::string const &id,
@@ -88,7 +95,8 @@ Result GeneralAdmin::editEmployee(std::string const &id,
   if (pd->getEmployeeId() != newData.getEmployeeId())
     return Result::EmployeeIdNotUniqueError;
 
-  *pd = newData;
+  updatePersonnelData(newData, pd);
+
   return Result::Success;
 }
 

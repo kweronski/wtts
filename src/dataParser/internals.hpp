@@ -4,7 +4,6 @@
 #include <string>
 #include <unordered_map>
 #include <wtts/dataParser.hpp>
-#include <wtts/logInfo.hpp>
 
 namespace dp {
 template <typename T> struct Employee {
