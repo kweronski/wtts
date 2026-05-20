@@ -112,7 +112,7 @@ public:
 
   std::vector<PaymentRecord> generatePaymentList(tu::TimePeriod const &period);
 
-	void updatePersonnelData(PersonnelData const &, PersonnelData *);
+  void updatePersonnelData(PersonnelData const &, PersonnelData *);
 
 protected:
   EmployeeSystem *system_;

@@ -1039,26 +1039,26 @@ void buildEmployeeSelectionMenu(
   s->getInterface()->menu.clear();
 
   for (auto e : employees) {
-    s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = e.first, .callback = [s, e]() {
-          s->pushMenuState();
-          s->setCurrentEmployeeId(e.second->getEmployeeId());
+    s->getInterface()->menu.push_back(
+        ShellMenuEntry{.description = e.first, .callback = [s, e]() {
+                         s->pushMenuState();
+                         s->setCurrentEmployeeId(e.second->getEmployeeId());
 
-          switch (e.second->getEmployeeRole()) {
-          case EmployeeRole::Employee:
-            buildEmployeeMenu(s, true);
-            break;
-          case EmployeeRole::Driver:
-            buildDriverMenu(s, true);
-            break;
-          case EmployeeRole::Admin:
-            buildAdminMenu(s, true);
-            break;
-          default:
-            buildManagerMenu(s, true);
-            break;
-          }
-        }});
+                         switch (e.second->getEmployeeRole()) {
+                         case EmployeeRole::Employee:
+                           buildEmployeeMenu(s, true);
+                           break;
+                         case EmployeeRole::Driver:
+                           buildDriverMenu(s, true);
+                           break;
+                         case EmployeeRole::Admin:
+                           buildAdminMenu(s, true);
+                           break;
+                         default:
+                           buildManagerMenu(s, true);
+                           break;
+                         }
+                       }});
   }
 
   s->getInterface()->menu.push_back(ShellMenuEntry{

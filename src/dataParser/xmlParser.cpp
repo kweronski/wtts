@@ -1,11 +1,11 @@
+#include "internals.hpp"
 #include <pugixml.hpp>
 #include <wtts/xmlParser.hpp>
-#include "internals.hpp"
 
 namespace dp {
 XMLDataParser::XMLDataParser(std::string const &url)
-    : DataParser(url),
-      document_{new pugi::xml_document{}, [](auto p) { delete p; }},
+    : DataParser(url), document_{new pugi::xml_document{},
+                                 [](auto p) { delete p; }},
       storage_{new DataStorage{}, [](auto p) { delete p; }} {}
 
 #ifdef MCR_XML_NODE
