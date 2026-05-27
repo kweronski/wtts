@@ -18,12 +18,14 @@ struct TimePeriod {
   AttendanceType type;
 };
 
+// Formats a human-readable attendance entry description.
 std::string makeAttendanceInstStr(TimePeriod const *);
 
 bool operator>=(TimePoint const &lhs, TimePoint const &rhs);
 
 bool operator<(TimePoint const &lhs, TimePoint const &rhs);
 
+// Returns elapsed time between two points in minutes.
 double operator-(TimePoint const &lhs, TimePoint const &rhs);
 
 std::time_t to_time_t(TimePoint const &tp);

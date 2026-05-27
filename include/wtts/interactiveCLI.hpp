@@ -8,6 +8,10 @@
 #include <wtts/employeeSystem.hpp>
 
 namespace es {
+/* Represents a mutable CLI menu action.
+ * The callback may update menu state, trigger side effects,
+ * or redirect control flow.
+ */
 template <typename F> struct MenuEntry {
   std::string description;
   F callback;
@@ -46,6 +50,10 @@ void appendDriverMenuEntries(Shell *s);
 bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
                  std::size_t end, Shell *s);
 
+/* Wraps a resource together with its associated mutex.
+ * Provides synchronized access without requiring callers
+ * to manage locking explicitly.
+ */
 template <typename T> struct GuardedResource {
 private:
   mutable std::mutex guard;
@@ -115,6 +123,8 @@ public:
   }
 };
 
+/* Used to restore menu state when returning from sub menus.
+ */
 struct MenuState {
   std::vector<ShellMenuEntry> menu;
   std::string inputInstruction;
@@ -122,6 +132,10 @@ struct MenuState {
   std::string currentEmployeeId;
 };
 
+/* Contains data used to render the CLI interface.
+ * Each data member that may be used concurrently,
+ * has its own mutex.
+ */
 struct UserInterface {
   GuardedResource<std::string> greeting;
   GuardedResource<std::vector<ShellMenuEntry>> menu;
@@ -135,6 +149,9 @@ struct UserInterface {
   GuardedResource<std::vector<char>> buf; // Stores input
 };
 
+/* Provides an interactive CLI interface to the employee system while
+ * simulating time progression for auto-logout behavior.
+ */
 class Shell {
 public:
   Shell(std::istream &in, std::ostream &out) : input_{in}, output_{out} {
