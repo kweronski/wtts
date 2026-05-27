@@ -6,7 +6,6 @@
 
 enum { success, error };
 
-// dopisac makro
 #ifdef MCR_ERR_CHECK
 #error "MCR_ERR_CHECK is already defined"
 #endif
