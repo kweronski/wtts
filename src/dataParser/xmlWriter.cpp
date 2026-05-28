@@ -7,6 +7,38 @@ XMLWriter::XMLWriter(std::string const &url)
     : DataWriter(url),
       storage_{new DataStorage, [](DataStorage *p) { delete p; }} {}
 
+#ifdef MCR_ADD_ATTR
+#error "MCR_ADD_ATTR is already defined"
+#endif
+
+#define MCR_ADD_CWV(parent, name, val)                                         \
+  do {                                                                         \
+    pugi::xml_node node = parent.append_child();                               \
+    node.set_name(name);                                                       \
+    pugi::xml_attribute v = node.append_attribute("value");                    \
+    v.set_value(val);                                                          \
+  } while (0)
+
+#ifdef MCR_INS_ATT
+#error "MCR_INS_ATT is laready defined"
+#endif
+
+#define MCR_INS_ATT(tp)                                                        \
+  {                                                                            \
+    auto n = inst.append_child();                                              \
+    n.set_name("begin");                                                       \
+    pugi::xml_attribute y = n.append_attribute("year");                        \
+    y.set_value(tp.year);                                                      \
+    pugi::xml_attribute m = n.append_attribute("month");                       \
+    m.set_value(tp.month);                                                     \
+    pugi::xml_attribute d = n.append_attribute("day");                         \
+    d.set_value(tp.day);                                                       \
+    pugi::xml_attribute h = n.append_attribute("hour");                        \
+    h.set_value(tp.hour);                                                      \
+    pugi::xml_attribute M = n.append_attribute("minute");                      \
+    M.set_value(tp.minute);                                                    \
+  }
+
 Result XMLWriter::writeData() const {
   pugi::xml_document doc;
 
@@ -19,61 +51,15 @@ Result XMLWriter::writeData() const {
     pugi::xml_attribute active = e.append_attribute("active");
     active.set_value(empl.status == EmployeeStatus::Active ? "true" : "false");
 
-    {
-      pugi::xml_node name = e.append_child();
-      name.set_name("name");
-      pugi::xml_attribute v = name.append_attribute("value");
-      v.set_value(empl.name.c_str());
-    }
-
-    {
-      pugi::xml_node surname = e.append_child();
-      surname.set_name("surname");
-      pugi::xml_attribute v = surname.append_attribute("value");
-      v.set_value(empl.surname.c_str());
-    }
-
-    {
-      pugi::xml_node tel = e.append_child();
-      tel.set_name("telephone");
-      pugi::xml_attribute v = tel.append_attribute("value");
-      v.set_value(empl.telephone.c_str());
-    }
-
-    {
-      pugi::xml_node email = e.append_child();
-      email.set_name("email");
-      pugi::xml_attribute v = email.append_attribute("value");
-      v.set_value(empl.email.c_str());
-    }
-
-    {
-      pugi::xml_node id = e.append_child();
-      id.set_name("id");
-      pugi::xml_attribute v = id.append_attribute("value");
-      v.set_value(empl.id.c_str());
-    }
-
-    {
-      pugi::xml_node swt = e.append_child();
-      swt.set_name("stdWorkTime");
-      pugi::xml_attribute v = swt.append_attribute("value");
-      v.set_value(empl.standardWorkTime);
-    }
-
-    {
-      pugi::xml_node mwt = e.append_child();
-      mwt.set_name("maxWorkTime");
-      pugi::xml_attribute v = mwt.append_attribute("value");
-      v.set_value(empl.maxWorkTime);
-    }
-
-    {
-      pugi::xml_node hw = e.append_child();
-      hw.set_name("hourlyWage");
-      pugi::xml_attribute v = hw.append_attribute("value");
-      v.set_value(empl.hourlyWage);
-    }
+    MCR_ADD_CWV(e, "name", empl.name.c_str());
+    MCR_ADD_CWV(e, "surname", empl.surname.c_str());
+    MCR_ADD_CWV(e, "telephone", empl.telephone.c_str());
+    MCR_ADD_CWV(e, "email", empl.email.c_str());
+    MCR_ADD_CWV(e, "id", empl.id.c_str());
+    MCR_ADD_CWV(e, "stdWorkTime", empl.standardWorkTime);
+    MCR_ADD_CWV(e, "maxWorkTime", empl.maxWorkTime);
+    MCR_ADD_CWV(e, "hourlyWage", empl.hourlyWage);
+    MCR_ADD_CWV(e, "role", empl.cardId.c_str());
 
     {
       pugi::xml_node n = e.append_child();
@@ -96,13 +82,6 @@ Result XMLWriter::writeData() const {
         v.set_value("unknown");
         break;
       }
-    }
-
-    {
-      pugi::xml_node n = e.append_child();
-      n.set_name("role");
-      pugi::xml_attribute v = n.append_attribute("value");
-      v.set_value(empl.cardId.c_str());
     }
 
     auto at = e.append_child();
@@ -132,35 +111,8 @@ Result XMLWriter::writeData() const {
         }
       }
 
-      {
-        auto n = inst.append_child();
-        n.set_name("begin");
-        pugi::xml_attribute y = n.append_attribute("year");
-        y.set_value(p.begin.year);
-        pugi::xml_attribute m = n.append_attribute("month");
-        m.set_value(p.begin.month);
-        pugi::xml_attribute d = n.append_attribute("day");
-        d.set_value(p.begin.day);
-        pugi::xml_attribute h = n.append_attribute("hour");
-        h.set_value(p.begin.hour);
-        pugi::xml_attribute M = n.append_attribute("minute");
-        M.set_value(p.begin.minute);
-      }
-
-      {
-        auto n = inst.append_child();
-        n.set_name("end");
-        pugi::xml_attribute y = n.append_attribute("year");
-        y.set_value(p.end.year);
-        pugi::xml_attribute m = n.append_attribute("month");
-        m.set_value(p.end.month);
-        pugi::xml_attribute d = n.append_attribute("day");
-        d.set_value(p.end.day);
-        pugi::xml_attribute h = n.append_attribute("hour");
-        h.set_value(p.end.hour);
-        pugi::xml_attribute M = n.append_attribute("minute");
-        M.set_value(p.end.minute);
-      }
+      MCR_INS_ATT(p.begin);
+      MCR_INS_ATT(p.end);
     }
   }
 
@@ -168,6 +120,8 @@ Result XMLWriter::writeData() const {
     return Result::CouldNotOpenFileError;
   return Result::Success;
 }
+
+#undef MCR_ADD_ATTR
 
 Employee *XMLWriter::addEmployee() {
   storage_->employees.push_back({});

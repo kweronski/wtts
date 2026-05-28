@@ -193,7 +193,10 @@ int main(int argc, char **argv) {
         goto atInst;
     }
 
-    w.writeData();
+    if (auto result = w.writeData(); result != dp::Result::Success) {
+      std::cerr << "Failed to write temporary xml file: " << opath << "\n";
+      return 1;
+    }
 
     if (auto result = r.loadData(); result != dp::Result::Success) {
       std::cerr << "Usage: " << argv[0] << " <path to txt source>\n";
