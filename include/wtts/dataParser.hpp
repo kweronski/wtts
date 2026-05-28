@@ -66,8 +66,36 @@ public:
   virtual es::EmployeeRole getEmployeeRole(ID const &id) const = 0;
   virtual std::string getEmployeeCardId(ID const &id) const = 0;
 
-  // Attendance info
   virtual ~DataParser() = default;
+
+protected:
+  std::string url_;
+};
+
+struct Employee;
+
+class DataWriter {
+public:
+  DataWriter(std::string const &url) : url_{url} {}
+  virtual Result writeData() const = 0;
+  using ID = Employee *;
+  virtual ID addEmployee() = 0;
+  virtual void addEmployeeAttendance(ID const, tu::TimePeriod const) = 0;
+
+  virtual void setEmployeeStatus(ID const id, EmployeeStatus const) = 0;
+  virtual void setEmployeeName(ID const id, std::string const &) = 0;
+  virtual void setEmployeeSurname(ID const id, std::string const &) = 0;
+  virtual void setEmployeeTelephone(ID const id, std::string const &) = 0;
+  virtual void setEmployeeEmail(ID const id, std::string const &) = 0;
+  virtual void setEmployeeId(ID const id, std::string const &) = 0;
+
+  virtual void setEmployeeStandardWorkTime(ID const id, unsigned const) = 0;
+  virtual void setEmployeeMaxWorkTime(ID const id, unsigned const) = 0;
+  virtual void setEmployeeHourlyWage(ID const id, unsigned const) = 0;
+  virtual void setEmployeeRole(ID const id, es::EmployeeRole const) = 0;
+  virtual void setEmployeeCardId(ID const id, std::string const &) = 0;
+
+  virtual ~DataWriter() = default;
 
 protected:
   std::string url_;

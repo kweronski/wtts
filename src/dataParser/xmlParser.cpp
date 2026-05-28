@@ -127,7 +127,7 @@ Result XMLDataParser::loadData() {
     return Result::Success;
 
   for (auto node = root.child("employee"); node; node = node.next_sibling()) {
-    Employee<DataParser::ID> data{};
+    Employee data{};
 
     std::string emplStatus;
     MCR_ATTR(emplStatus, active, node,

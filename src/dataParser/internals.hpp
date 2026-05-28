@@ -6,12 +6,12 @@
 #include <wtts/dataParser.hpp>
 
 namespace dp {
-template <typename T> struct Employee {
+struct Employee {
   EmployeeStatus status;
   std::string name, surname, telephone, email;
   es::EmployeeRole role;
   std::string cardId;
-  T id;
+  std::string id;
   unsigned standardWorkTime, maxWorkTime;
   unsigned hourlyWage{};
   std::list<tu::TimePeriod> attendance;
@@ -19,7 +19,7 @@ template <typename T> struct Employee {
 
 struct DataStorage {
   using ID = std::string;
-  std::unordered_map<ID, Employee<ID> *> employeeMap;
-  std::list<Employee<ID>> employees;
+  std::unordered_map<ID, Employee *> employeeMap;
+  std::list<Employee> employees;
 };
 } // namespace dp

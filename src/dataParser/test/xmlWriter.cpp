@@ -72,9 +72,9 @@ int main(int argc, char **argv) {
   }
 
   try {
-    std::string const spath{argv[1]}, opath{"/tmp/xmlWriterTest.xml"};
-    es::XMLWriter w{opath};
-    es::XMLParser r{opath};
+    std::string const spath{argv[1]}, opath{"./xmlWriterTest.xml"};
+    dp::XMLWriter w{opath};
+    dp::XMLDataParser r{opath};
     std::ifstream s{spath};
 
     if (!s.is_open()) {
@@ -84,14 +84,15 @@ int main(int argc, char **argv) {
 
     /* Load up the text data into the xml writer */
     std::string record;
-    std::getline(s, record);
+    std::size_t idcnt{};
 
     while (!s.eof()) {
       auto storage = w.addEmployee();
 
-      es::EmployeeStatus status{es::EmployeeStatus::Active};
+      std::getline(s, record);
+      dp::EmployeeStatus status{dp::EmployeeStatus::Active};
       if (record == "inactive")
-        status = es::EmployeeStatus::Inactive;
+        status = dp::EmployeeStatus::Inactive;
       else if (record != "active") {
         std::cerr << "Unsupported status: " << record << std::endl;
         return 1;
@@ -105,27 +106,21 @@ int main(int argc, char **argv) {
       w.setEmployeeSurname(storage, record);
 
       std::getline(s, record);
-      w.setEmployeeTelephone(storage, record);
-
-      std::getline(s, record);
       w.setEmployeeEmail(storage, record);
 
       std::getline(s, record);
-      w.setEmployeeId(storage, record);
+      w.setEmployeeTelephone(storage, record);
 
-      unsigned value{};
-
-      std::getline(s, record);
-      value = std::stoi(record);
-      w.setEmployeeStandardWorkTime(storage, record);
+      w.setEmployeeId(storage, std::to_string(idcnt++));
 
       std::getline(s, record);
-      value = std::stoi(record);
-      w.setEmployeeMaxWorkTime(storage, record);
+      w.setEmployeeStandardWorkTime(storage, std::stoi(record));
 
       std::getline(s, record);
-      value = std::stoi(record);
-      w.setEmployeeHourlyWage(storage, record);
+      w.setEmployeeMaxWorkTime(storage, std::stoi(record));
+
+      std::getline(s, record);
+      w.setEmployeeHourlyWage(storage, std::stoi(record));
 
       es::EmployeeRole role{};
       std::getline(s, record);
@@ -139,65 +134,80 @@ int main(int argc, char **argv) {
         role = es::EmployeeRole::Admin;
       else
         role = es::EmployeeRole::Unknown;
-      w.setEmployeeRole(storage, record);
+      w.setEmployeeRole(storage, role);
 
       std::getline(s, record);
       w.setEmployeeCardId(storage, record);
 
-      while (record != "active" && record != "inactive") {
-        tu::TimePeriod t{};
+      auto pos = s.tellg();
+      std::getline(s, record);
+      s.seekg(pos);
 
-        std::getline(s, record);
-        if (record == "Sick")
-          t.type = tu::AttendanceType::Sick;
-        else if (record == "Vacation")
-          t.type = tu::AttendanceType::Vacation;
-        else if (record == "Delivery")
-          t.type = tu::AttendanceType::Delivery;
-        else if (record == "Work")
-          t.type = tu::AttendanceType::Work;
-        else {
-          std::cerr << "Unknown attendance type: " << record << std::endl;
-          return 1;
-        }
+      if (record == "active" || record == "inactive")
+        continue;
 
-        std::getline(s, record);
-        t.begin.year = std::stoi(record);
-        std::getline(s, record);
-        t.begin.month = std::stoi(record);
-        std::getline(s, record);
-        t.begin.day = std::stoi(record);
-        std::getline(s, record);
-        t.begin.hour = std::stoi(record);
-        std::getline(s, record);
-        t.begin.minute = std::stoi(record);
-        std::getline(s, record);
-        t.end.year = std::stoi(record);
-        std::getline(s, record);
-        t.end.month = std::stoi(record);
-        std::getline(s, record);
-        t.end.day = std::stoi(record);
-        std::getline(s, record);
-        t.end.hour = std::stoi(record);
-        std::getline(s, record);
-        t.end.minute = std::stoi(record);
-
-        w.addEmployeeAttendance(storage, t);
+    atInst:
+      std::getline(s, record);
+      tu::TimePeriod t;
+      if (record == "Sick")
+        t.type = tu::AttendanceType::Sick;
+      else if (record == "Vacation")
+        t.type = tu::AttendanceType::Vacation;
+      else if (record == "Delivery")
+        t.type = tu::AttendanceType::Delivery;
+      else if (record == "Work")
+        t.type = tu::AttendanceType::Work;
+      else {
+        std::cerr << "Unknown attendance type: " << record << std::endl;
+        return 1;
       }
+
+      std::getline(s, record);
+      t.begin.year = std::stoi(record);
+      std::getline(s, record);
+      t.begin.month = std::stoi(record);
+      std::getline(s, record);
+      t.begin.day = std::stoi(record);
+      std::getline(s, record);
+      t.begin.hour = std::stoi(record);
+      std::getline(s, record);
+      t.begin.minute = std::stoi(record);
+      std::getline(s, record);
+      t.end.year = std::stoi(record);
+      std::getline(s, record);
+      t.end.month = std::stoi(record);
+      std::getline(s, record);
+      t.end.day = std::stoi(record);
+      std::getline(s, record);
+      t.end.hour = std::stoi(record);
+      std::getline(s, record);
+      t.end.minute = std::stoi(record);
+
+      w.addEmployeeAttendance(storage, t);
+      pos = s.tellg();
+      std::getline(s, record);
+      if (s.eof())
+        break;
+      s.seekg(pos);
+      if (record != "active" && record != "inactive")
+        goto atInst;
     }
 
     w.writeData();
 
-    r.loadData();
     if (auto result = r.loadData(); result != dp::Result::Success) {
-      std::cerr << "Usage: " << argv[0]
-                << " <path to xml data> <path to txt cross reference>\n"
-                << " Incorrect path to xml data?\n";
+      std::cerr << "Usage: " << argv[0] << " <path to txt source>\n";
       return 1;
     }
 
     std::ifstream file{spath};
     std::size_t lineNumber{};
+
+    auto const statusToString = [](dp::EmployeeStatus s) {
+      if (s == dp::EmployeeStatus::Active)
+        return "active";
+      return "inactive";
+    };
 
     for (auto &&id : r.getEmployeeIdentifiers()) {
       MCR_ERR_CHECK(statusToString(r.getEmployeeStatus(id)), file);

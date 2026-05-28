@@ -74,18 +74,11 @@ int main(int argc, char **argv) {
 
   dp::XMLDataParser parser{argv[1]};
   if (auto result = parser.loadData(); result != dp::Result::Success) {
-    // something went wrong
     std::cerr << "Usage: " << argv[0]
               << " <path to xml data> <path to txt cross reference>\n"
               << " Incorrect path to xml data?\n";
     return error;
   }
-
-  /* LOGIC:
-   * Use DataParser interface to extract information from XML file.
-   * Use txt file to verify that the extracted data from the XML file
-   * is correct.
-   */
 
   std::ifstream file(argv[2]);
   std::size_t lineNumber = 0;

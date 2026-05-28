@@ -5,6 +5,7 @@ add_compile_options(-O0 -g -Werror -Wall -Wextra -Wpedantic)
 
 add_library(dataparser
 	dataParser/xmlParser.cpp
+	dataParser/xmlWriter.cpp
 	dataParser/dataParser.cpp
 	dataParser/internals.cpp
 	logInfo.cpp
