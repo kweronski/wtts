@@ -1,1537 +1,1270 @@
-#include <iomanip>
-#include <thread>
+#include <cassert>
+#include <pugixml.hpp>
 #include <wtts/employeeData.hpp>
 #include <wtts/employeeSystem.hpp>
 #include <wtts/employeeSystemFactory.hpp>
 #include <wtts/interactiveCLI.hpp>
+#include <wtts/shell.hpp>
 #include <wtts/xmlParser.hpp>
+#include <wtts/xmlWriter.hpp>
 
-// For input handling
-#include <fcntl.h>
-#include <termios.h>
-#include <unistd.h>
+namespace sh {
+Result run(Shell *shell) {
+  if (auto res = initialize(shell); res != Result::Success)
+    return res;
 
-#ifdef MCR_CNF_LOG
-#error "MCR_CNF_LOG is already defined"
-#endif
+  while (shell->control.currentStateType != StateType::ExitInProgress)
+    if (auto res = update(shell); res != Result::Success)
+      return res;
 
-#define MCR_CNF_LOG(str, shell)                                                \
-  do {                                                                         \
-    std::lock_guard<std::mutex> lock{shell->getConsoleGuardIn()};              \
-    shell->setInputInstruction(str);                                           \
-    auto oldPrompt = shell->getPromptText();                                   \
-    shell->setPromptText("\n(Press enter)> ");                                 \
-    shell->readLine();                                                         \
-    shell->setPromptText(oldPrompt);                                           \
-    shell->setInputInstruction("");                                            \
-  } while (0);
+  return Result::Success;
+}
 
-class ScopedThread {
-  std::thread t;
+Result initialize(Shell *shell) {
+  // Reads the XML interface file and populates internal structures
+  if (auto res = initializeStateDesc(shell); res != Result::Success)
+    return res;
 
-public:
-  explicit ScopedThread(std::thread t_) : t(std::move(t_)) {}
+  if (auto res = initializeInternalStates(shell); res != Result::Success)
+    return res;
 
-  ~ScopedThread() {
-    if (t.joinable()) {
-      t.join(); // automatically join on destruction
+  // Creates windows and other NCURSES entities
+  if (auto res = initializeInterface(shell); res != Result::Success)
+    return res;
+
+  if (auto res = initializeActionQueue(shell); res != Result::Success)
+    return res;
+
+  shell->esys = std::make_unique<es::EmployeeSystem>();
+  return Result::Success;
+}
+
+Result updateAutoLogout(Shell *shell) {
+  assert(shell->esys);
+  auto empl = shell->esys->autoCheckOut();
+
+  if (empl.size()) {
+    for (auto const e : empl) {
+      std::string title = "Logged out: " + e->getEmployeeName() +
+                          e->getEmployeeSurname() + " (" + e->getEmployeeId() +
+                          ")";
+      shell->control.notifications.push_back(title);
     }
   }
 
-  // non-copyable
-  ScopedThread(const ScopedThread &) = delete;
-  ScopedThread &operator=(const ScopedThread &) = delete;
-
-  // movable
-  ScopedThread(ScopedThread &&other) noexcept : t(std::move(other.t)) {}
-  ScopedThread &operator=(ScopedThread &&other) noexcept {
-    if (t.joinable())
-      t.join();
-    t = std::move(other.t);
-    return *this;
-  }
-};
-
-std::string getCurrentTime() {
-  // 1. Get current time as time_point
-  auto now = std::chrono::system_clock::now();
-
-  // 2. Convert to time_t (calendar time)
-  std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-
-  // 3. Convert to local time
-  std::tm local_tm;
-#if defined(_WIN32) || defined(_WIN64)
-  localtime_s(&local_tm, &now_c); // thread-safe on Windows
-#else
-  localtime_r(&now_c, &local_tm); // thread-safe on Linux/macOS
-#endif
-
-  // 4. Format into string
-  std::ostringstream oss;
-  oss << std::put_time(&local_tm, "%Y/%m/%d %H:%M:%S");
-  return oss.str();
+  return Result::Success;
 }
 
-namespace es {
+Result update(Shell *shell) {
+  updateInputBuffer(shell);
+  updateAutoLogout(shell);
 
-// Returns the GeneralAdmin* for the currently selected employee, or nullptr
-// if no employee is selected (anonymous admin) or the employee lacks admin
-// privileges. Logs an error message and returns nullptr on failure when an
-// employee IS selected but the cast fails.
-static GeneralAdmin *resolveAdmin(Shell *s) {
-  auto const &id = s->getCurrentEmployeeId();
-  if (id.empty())
-    return nullptr;
+  if (auto res = updateBanner(shell); res != Result::Success)
+    return res;
 
-  auto emp = s->getSystem()->getEmployeeById(id);
-  if (!emp) {
-    MCR_CNF_LOG("Error: Could not resolve active user\n", s);
-    return nullptr;
+  if (auto res = updateInputWindow(shell); res != Result::Success)
+    return res;
+
+  if (auto res = executeProcedure(shell); res != Result::Success)
+    return res;
+
+  shell->control.currentStateType =
+      shell->control.actionQueue[shell->control.actionIndex]->type;
+
+  if (auto ESC = 27; shell->control.signalReady && shell->control.signal == ESC)
+    shell->control.currentStateType = StateType::ExitInProgress;
+
+  return Result::Success;
+}
+
+Result addEmployee(Shell *shell) {
+  auto const &args = shell->control.argStorage;
+  auto const idx = shell->control.actionIndex;
+  auto &queue = shell->control.actionQueue;
+
+  auto const name = args.at(queue.at(idx)->argLookup.at("name"));
+  auto const surname = args.at(queue.at(idx)->argLookup.at("surname"));
+  auto const telephone = args.at(queue.at(idx)->argLookup.at("telephone"));
+  auto const email = args.at(queue.at(idx)->argLookup.at("email"));
+  auto const cardId = args.at(queue.at(idx)->argLookup.at("cardId"));
+  auto const employeeId = args.at(queue.at(idx)->argLookup.at("employeeId"));
+
+  bool retry = false, active = true;
+  if (!name.size()) {
+    markArgAsNotValid("name", "The argument is empty", shell);
+    retry = true;
   }
 
-  switch (emp->getEmployeeRole()) {
-  case EmployeeRole::Manager:
-    return dynamic_cast<Manager *>(emp);
-  case EmployeeRole::Admin:
-    return dynamic_cast<Admin *>(emp);
-  default:
-    MCR_CNF_LOG("Error: Active user does not have admin privileges\n", s);
-    return nullptr;
-  }
-}
-
-std::string formatEmployeeRecord(Employee const *e) {
-  return e->getEmployeeName() + " " + e->getEmployeeSurname() + " (" +
-         e->getEmployeeId() + ") (" + to_string(e->getEmployeeRole()) + ")";
-}
-
-std::string formatEmployeeRecord(std::size_t index, Employee const *e) {
-  return std::to_string(index) + ". " + formatEmployeeRecord(e);
-}
-
-// Returns the prompt string appropriate for the current shell state.
-static std::string buildPromptText(Shell *s) {
-  auto const &id = s->getCurrentEmployeeId();
-  if (id.empty())
-    return "(Admin)> ";
-  auto emp = s->getSystem()->getEmployeeById(id);
-  if (!emp)
-    return "(Admin)> ";
-  return formatEmployeeRecord(emp) + "> ";
-}
-
-void Shell::greet() {
-  ui_.greeting.set("Welcome to WTTS (Work Time Tracking System)\n");
-}
-
-std::string Shell::readLine() {
-  char c{};
-  while ((c = getchar()) != '\n') {
-    if (c == -1) // no input
-      continue;
-
-    if ((c == '\b' || c == 127) && ui_.buf.size())
-      ui_.buf.pop_back();
-    else
-      ui_.buf.push_back(c);
+  if (!surname.size()) {
+    markArgAsNotValid("surname", "The argument is empty", shell);
+    retry = true;
   }
 
-  if (ui_.buf.size()) {
-    auto line = ui_.buf.merge<std::string>();
-    ui_.buf.clear();
-    return line;
+  if (!telephone.size()) {
+    markArgAsNotValid("telephone", "The argument is empty", shell);
+    retry = true;
   }
 
-  return "";
-}
-
-void Shell::run() {
-  termios oldt, newt;
-  tcgetattr(STDIN_FILENO, &oldt);
-  newt = oldt;
-  newt.c_lflag &= ~(ICANON | ECHO);
-  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-  int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-  fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
-
-  greet();
-
-  buildMainMenu(this);
-
-  ScopedThread ui{std::thread{[this]() {
-    while (!this->exit_)
-      this->renderUserInterface();
-    write("\n");
-  }}};
-
-  ScopedThread autoCheckout{std::thread{[this]() {
-    while (!this->exit_) {
-      std::this_thread::sleep_for(std::chrono::seconds{1});
-      this->autoCheckout();
-    }
-  }}};
-
-  this->handleInput();
-
-  fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
-  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-}
-
-void Shell::autoCheckout() {
-  std::lock_guard<std::mutex> lock{systemGuard_};
-
-  if (!system_)
-    return;
-
-  std::string message;
-
-  if (auto checkedOut = system_->autoCheckOut(); checkedOut.size()) {
-    message += "Checked out the following emploees: \n";
-
-    for (auto employee : checkedOut)
-      message += "\t" + formatEmployeeRecord(employee) + "\n";
-
-    MCR_CNF_LOG(message, this);
-  }
-}
-
-void Shell::handleInput() {
-  while (!this->exit_) {
-    std::size_t index{};
-    std::string input;
-
-    {
-      std::lock_guard<std::mutex> lock{consoleGuardIn_};
-      char c = getchar();
-      if (c == -1)
-        continue;
-      else if (c != '\n' && c != 127 && c != '\b')
-        ui_.buf.push_back(c);
-      else if ((c == '\b' || c == 127) && ui_.buf.size())
-        ui_.buf.pop_back();
-      if (c != '\n')
-        continue;
-    }
-
-    input = ui_.buf.merge<std::string>();
-    ui_.buf.clear();
-
-    if (input == "exit") {
-      this->requestExit(); // required to halt async thread
-      break;
-    }
-
-    ui_.greeting.clear();
-
-    try {
-      index = std::stoul(input);
-    } catch (...) {
-      MCR_CNF_LOG("'" + input + "' is not a valid number\n", this);
-      continue;
-    }
-
-    if (!index) {
-      MCR_CNF_LOG("'" + input + "' is not a valid index\n", this);
-      continue;
-    }
-
-    auto entry = ui_.menu.at<std::size_t>(index - 1);
-    entry.callback();
-  }
-}
-
-void Shell::renderUserInterface() {
-  auto const now = std::chrono::system_clock::now();
-  if (now - ui_.lastRefresh.get() < ui_.tick.get())
-    return;
-  ui_.lastRefresh.set(now);
-
-  write("\033[2J\033[H"); // Clear screen: works on ANSI terminals
-  write(ui_.greeting.get());
-
-  ui_.date.set(getCurrentTime());
-  write("(WTTS) ", ui_.date.get(), "\n");
-
-  for (std::size_t i = 1; i <= ui_.menu.size(); ++i)
-    write(i, ". ", ui_.menu.at(i - 1).description, "\n");
-
-  write(ui_.inputInstruction.get());
-  write(ui_.prompt.get());
-  write(ui_.buf.merge<std::string>());
-}
-
-void appendGeneralAdminMenuEntries(Shell *s) {
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Set employee absence", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        auto admin =
-            s->getCurrentEmployeeId().empty() ? nullptr : resolveAdmin(s);
-
-        s->pushMenuState();
-        buildAbsenceEmployeeSelectionMenu(s, emp, admin);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "View employee attendance", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        if (emp.empty()) {
-          MCR_CNF_LOG("No employees found in the system\n", s);
-          return;
-        }
-
-        s->pushMenuState();
-        s->getInterface()->menu.clear();
-
-        for (auto e : emp) {
-          s->getInterface()->menu.push_back(ShellMenuEntry{
-              .description = formatEmployeeRecord(e), .callback = [s, e]() {
-                std::size_t startYear, startMonth, endYear, endMonth;
-                tu::TimePoint tp;
-                tp.populate();
-
-                if (!readBounded("Enter start year: \n", &startYear, 1970,
-                                 tp.year + 1, s)) {
-                  s->popMenuState();
-                  return;
-                }
-                if (!readBounded("Enter start month: \n", &startMonth, 1, 13,
-                                 s)) {
-                  s->popMenuState();
-                  return;
-                }
-                if (!readBounded("Enter end year: \n", &endYear, 1970,
-                                 tp.year + 1, s)) {
-                  s->popMenuState();
-                  return;
-                }
-                if (!readBounded("Enter end month: \n", &endMonth, 1, 13, s)) {
-                  s->popMenuState();
-                  return;
-                }
-
-                tu::TimePeriod range{.begin = {.year = unsigned(startYear),
-                                               .month = unsigned(startMonth),
-                                               .day = 1,
-                                               .hour = 0,
-                                               .minute = 0},
-                                     .end = {.year = unsigned(endYear),
-                                             .month = unsigned(endMonth),
-                                             .day = 31,
-                                             .hour = 23,
-                                             .minute = 59},
-                                     .type = {}};
-
-                auto records = e->getAttendanceTable().getRecords(range);
-
-                if (records.empty()) {
-                  MCR_CNF_LOG(
-                      "No attendance records found in the given range\n", s);
-                  s->popMenuState();
-                  return;
-                }
-
-                std::string message =
-                    "Attendance records for " + formatEmployeeRecord(e) + ":\n";
-                for (auto const &r : records)
-                  message += "\t" + to_string(r) + "\n";
-
-                MCR_CNF_LOG(message, s);
-                s->popMenuState();
-              }});
-        }
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Exit", .callback = [s]() { s->requestExit(); }});
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Calculate employee pay", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        if (emp.empty()) {
-          MCR_CNF_LOG("No employees found in the system\n", s);
-          return;
-        }
-
-        s->pushMenuState();
-
-        s->getInterface()->menu.clear();
-
-        for (auto e : emp) {
-          s->getInterface()->menu.push_back(ShellMenuEntry{
-              .description = e->getEmployeeName() + " " +
-                             e->getEmployeeSurname() +
-                             " ID: " + e->getEmployeeId(),
-              .callback = [s, e]() {
-                std::size_t year, month;
-                tu::TimePoint tp;
-                tp.populate();
-
-                if (!readBounded("Enter start year: \n", &year, 1970,
-                                 tp.year + 1, s)) {
-                  s->popMenuState();
-                  return;
-                }
-                if (!readBounded("Enter start month: \n", &month, 1, 13, s)) {
-                  s->popMenuState();
-                  return;
-                }
-
-                tu::TimePoint start{.year = unsigned(year),
-                                    .month = unsigned(month),
-                                    .day = 1,
-                                    .hour = 0,
-                                    .minute = 0};
-
-                auto pay = e->calculatePay(start);
-
-                std::ostringstream oss;
-                oss << std::fixed << std::setprecision(2);
-                oss << "Calculated pay for " << e->getEmployeeName() << " "
-                    << e->getEmployeeSurname() << ": " << pay << "\n";
-
-                MCR_CNF_LOG(oss.str(), s);
-                s->popMenuState();
-              }});
-        }
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Exit", .callback = [s]() { s->requestExit(); }});
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Edit employee info", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        if (emp.empty()) {
-          MCR_CNF_LOG("No employees found in the system\n", s);
-          return;
-        }
-
-        s->pushMenuState();
-        s->getInterface()->menu.clear();
-
-        for (auto e : emp) {
-          s->getInterface()->menu.push_back(ShellMenuEntry{
-              .description = e->getEmployeeName() + " " +
-                             e->getEmployeeSurname() +
-                             " ID: " + e->getEmployeeId(),
-              .callback = [s, e]() {
-                std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-
-                // anonymous admin → nullptr, selected employee → GeneralAdmin*
-                GeneralAdmin *admin = s->getCurrentEmployeeId().empty()
-                                          ? nullptr
-                                          : resolveAdmin(s);
-
-                s->pushMenuState();
-                buildEditEmployeeMenu(s, e, admin);
-              }});
-        }
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Exit", .callback = [s]() { s->requestExit(); }});
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Add employee", .callback = [s]() {
-        // --- Collect string fields ---
-        auto readString = [s](std::string const &prompt) -> std::string {
-          s->setInputInstruction(prompt);
-          auto val = s->readLine();
-          s->setInputInstruction("");
-          return val;
-        };
-
-        std::string name = readString("Enter employee name: \n");
-        std::string surname = readString("Enter employee surname: \n");
-        std::string phone = readString("Enter employee telephone: \n");
-        std::string email = readString("Enter employee email: \n");
-        std::string cardId = readString("Enter employee card ID: \n");
-        std::string empId = readString("Enter employee ID: \n");
-
-        // --- Collect numeric fields ---
-        std::size_t stdWork{}, maxWork{}, wage{};
-
-        if (!readBounded("Enter standard work time (hours/day): \n", &stdWork,
-                         1, 169, s))
-          return;
-        if (!readBounded("Enter max work time (hours/day): \n", &maxWork, 1,
-                         169, s))
-          return;
-        if (!readBounded("Enter hourly wage: \n", &wage, 1, 100001, s))
-          return;
-
-        // --- Role selection ---
-        std::size_t roleIdx{};
-        if (!readBounded("Select role: \n"
-                         "\t1. Employee\n"
-                         "\t2. Driver\n"
-                         "\t3. Manager\n"
-                         "\t4. Admin\n",
-                         &roleIdx, 1, 5, s))
-          return;
-
-        EmployeeRole role{};
-        switch (roleIdx) {
-        case 1:
-          role = EmployeeRole::Employee;
-          break;
-        case 2:
-          role = EmployeeRole::Driver;
-          break;
-        case 3:
-          role = EmployeeRole::Manager;
-          break;
-        case 4:
-          role = EmployeeRole::Admin;
-          break;
-        }
-
-        // --- Active status ---
-        std::size_t activeIdx{};
-        if (!readBounded("Set employee as active? \n\t1. Yes\n\t2. No\n",
-                         &activeIdx, 1, 3, s))
-          return;
-        bool active = (activeIdx == 1);
-
-        // --- Build personnel record ---
-        PersonnelData newPd{};
-        newPd.setEmployeeName(name);
-        newPd.setEmployeeSurname(surname);
-        newPd.setEmployeeTelephone(phone);
-        newPd.setEmployeeEmail(email);
-        newPd.setEmployeeCardId(cardId);
-        newPd.setEmployeeId(empId);
-        newPd.setEmployeeStandardWorkTime(static_cast<unsigned>(stdWork));
-        newPd.setEmployeeMaxWorkTime(static_cast<unsigned>(maxWork));
-        newPd.setEmployeeHourlyWage(static_cast<unsigned>(wage));
-        newPd.setEmployeeRole(role);
-        newPd.setEmployeeActive(active);
-
-        // --- Add to system ---
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        Result result{};
-
-        if (auto admin =
-                s->getCurrentEmployeeId().empty() ? nullptr : resolveAdmin(s)) {
-          result = admin->addEmployee(newPd);
-        } else {
-          PersonnelData *pd{};
-          AttendanceData *ad{};
-          switch (roleIdx) {
-          case 1: {
-            Employee *e{};
-            result = sys->addEmployee(&e, &pd, &ad);
-            break;
-          }
-          case 2: {
-            Driver *e{};
-            result = sys->addEmployee(&e, &pd, &ad);
-            break;
-          }
-          case 3: {
-            Manager *e{};
-            result = sys->addEmployee(&e, &pd, &ad);
-            break;
-          }
-          case 4: {
-            Admin *e{};
-            result = sys->addEmployee(&e, &pd, &ad);
-            break;
-          }
-          }
-          if (result == Result::Success && pd)
-            *pd = newPd;
-        }
-
-        if (result != Result::Success) {
-          MCR_CNF_LOG(
-              "Error: Failed to add employee: " + to_string(result) + "\n", s);
-          return;
-        }
-
-        std::ostringstream oss;
-        oss << "Successfully added employee:\n"
-            << "\tName:                " << name << " " << surname << "\n"
-            << "\tID:                  " << empId << "\n"
-            << "\tCard ID:             " << cardId << "\n"
-            << "\tTelephone:           " << phone << "\n"
-            << "\tEmail:               " << email << "\n"
-            << "\tRole:                " << to_string(role) << "\n"
-            << "\tStandard work time:  " << stdWork << "h/week\n"
-            << "\tMax work time:       " << maxWork << "h/week\n"
-            << "\tHourly wage:         " << wage << "\n"
-            << "\tActive:              " << (active ? "Yes" : "No") << "\n";
-
-        MCR_CNF_LOG(oss.str(), s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Print payment list", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto *admin = resolveAdmin(s);
-        s->pushMenuState();
-        if (admin) {
-          buildPaymentListMenu(s, admin);
-        } else {
-          auto sys = s->getSystem();
-          auto emp =
-              sys->getEmployeeBy([](Employee const *, PersonnelData const *pd,
-                                    AttendanceData const *ad) {
-                if (pd->getEmployeeActive()) {
-                  for (auto const &ad_i : ad->getRecords()) {
-                    if (ad_i.type == tu::AttendanceType::Work)
-                      return true;
-                  }
-                }
-                return false;
-              });
-          buildPaymentListMenu(s, emp);
-        }
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "List checked-in employees", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *a) {
-              return a->getCurrentTimePeriod()->begin.year;
-            });
-
-        std::string message = "Checked in employees: \n";
-        for (std::size_t i = 0; i < emp.size(); ++i)
-          message += "\t" + formatEmployeeRecord(i + 1, emp[i]) + "\n";
-
-        MCR_CNF_LOG(message, s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "List all employees", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        std::string message = "All employees: \n";
-        for (std::size_t i = 0; i < emp.size(); ++i)
-          message += "\t" + formatEmployeeRecord(i + 1, emp[i]) + "\n";
-
-        MCR_CNF_LOG(message, s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Select employee", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        std::vector<std::pair<std::string, Employee *>> allEmployees;
-        for (std::size_t i = 0; i < emp.size(); ++i)
-          allEmployees.push_back({formatEmployeeRecord(emp[i]), emp[i]});
-
-        s->pushMenuState();
-        buildEmployeeSelectionMenu(s, allEmployees);
-      }});
-}
-
-unsigned int daysInMonth(unsigned int const year, unsigned int const month) {
-  switch (month) {
-  case 1:
-  case 3:
-  case 5:
-  case 7:
-  case 8:
-  case 10:
-  case 12:
-    return 31;
-
-  case 4:
-  case 6:
-  case 9:
-  case 11:
-    return 30;
-
-  case 2: {
-    bool leapYear = (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0));
-
-    return leapYear ? 29 : 28;
+  if (!email.size()) {
+    markArgAsNotValid("email", "The argument is empty", shell);
+    retry = true;
   }
 
-  default:
-    return -1; // invalid month
-  }
-}
-
-void buildPaymentListMenu(Shell *s, GeneralAdmin *admin) {
-  s->getInterface()->menu.clear();
-
-  std::size_t year, month;
-  tu::TimePoint tPt;
-  tu::TimePeriod tPd;
-  tPt.populate();
-
-  if (!readBounded("Enter period year: \n", &year, tPt.year, tPt.year + 1, s)) {
-    s->popMenuState();
-    return;
-  }
-  if (!readBounded("Enter period month: \n", &month, 1, 13, s)) {
-    s->popMenuState();
-    return;
-  }
-  tPd.begin = {.year = (unsigned int)year,
-               .month = (unsigned int)month,
-               .day = (unsigned int)1,
-               .hour = (unsigned int)0,
-               .minute = (unsigned int)0};
-  tPd.end = {
-      .year = (unsigned int)year,
-      .month = (unsigned int)month,
-      .day = (unsigned int)daysInMonth((unsigned int)year, (unsigned int)month),
-      .hour = (unsigned int)23,
-      .minute = (unsigned int)59};
-  tPd.type = tu::AttendanceType::Work;
-
-  auto records = admin->generatePaymentList(tPd);
-
-  std::string message = "\n\tPayment list,\t" + std::to_string(year) + "-" +
-                        std::format("{:02}", month) +
-                        " \n\tNo  "
-                        "ID\t\tName\t\tSum[PLN]\n";
-  double totalWorkerPay = 0;
-  for (std::size_t i = 0; i < records.size(); ++i) {
-    auto const *employee = records[i].recipient;
-    auto const sum = records[i].value;
-    totalWorkerPay += sum;
-    message +=
-        "\t" + std::to_string(i + 1) + "." + " (" + employee->getEmployeeId() +
-        ") " + "  " + employee->getEmployeeName() + " " +
-        employee->getEmployeeSurname() + "\t\t" + std::to_string(sum) + "\n";
-  }
-  message += "\n\tTotal worker cost: " + std::to_string(totalWorkerPay) + "\n";
-  MCR_CNF_LOG(message, s);
-
-  s->popMenuState();
-}
-
-void buildPaymentListMenu(Shell *s, std::vector<Employee *> const &emp) {
-  s->getInterface()->menu.clear();
-
-  std::size_t year, month;
-  tu::TimePoint tPt;
-  tu::TimePeriod tPd;
-  tPt.populate();
-
-  if (!readBounded("Enter period year: \n", &year, tPt.year, tPt.year + 1, s)) {
-    s->popMenuState();
-    return;
-  }
-  if (!readBounded("Enter period month: \n", &month, 1, 13, s)) {
-    s->popMenuState();
-    return;
-  }
-  tPd.begin = {.year = (unsigned int)year,
-               .month = (unsigned int)month,
-               .day = (unsigned int)1,
-               .hour = (unsigned int)0,
-               .minute = (unsigned int)0};
-
-  tPd.end = {
-      .year = (unsigned int)year,
-      .month = (unsigned int)month,
-      .day = (unsigned int)daysInMonth((unsigned int)year, (unsigned int)month),
-      .hour = (unsigned int)23,
-      .minute = (unsigned int)59};
-  tPd.type = tu::AttendanceType::Work;
-
-  std::string message = "\n\tPayment list,\t" + std::to_string(year) + "-" +
-                        std::format("{:02}", month) +
-                        " \n\tNo  "
-                        "ID\t\tName\t\tSum[PLN]\n";
-  double totalWorkerPay = 0;
-  for (std::size_t i = 0; i < emp.size(); ++i) {
-    auto const employee = emp[i];
-    auto sum = employee->calculatePay(tPd);
-    totalWorkerPay += sum;
-    message +=
-        "\t" + std::to_string(i + 1) + "." + " (" + employee->getEmployeeId() +
-        ") " + "  " + employee->getEmployeeName() + " " +
-        employee->getEmployeeSurname() + "\t\t" + std::to_string(sum) + "\n";
-  }
-  message += "\n\tTotal worker cost: " + std::to_string(totalWorkerPay) + "\n";
-  MCR_CNF_LOG(message, s);
-
-  s->popMenuState();
-}
-// head end here
-void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
-                           std::shared_ptr<PersonnelData>) {
-  // Working copy — all edits staged here until Save is selected
-  auto sys = s->getSystem();
-  auto pd = sys->getEmployeeInfo(e);
-  if (!pd) {
-    MCR_CNF_LOG("Error: Could not retrieve employee data\n", s);
-    return;
+  if (!cardId.size()) {
+    markArgAsNotValid("cardId", "The argument is empty", shell);
+    retry = true;
   }
 
-  auto staged = std::make_shared<PersonnelData>(*pd); // copy current state
-
-  auto rebuild = [s, e, admin, staged]() {
-    buildEditEmployeeMenu(s, e, admin, staged);
-  };
-
-  s->getInterface()->menu.clear();
-
-  auto makeStringEntry =
-      [s, staged, rebuild](std::string const &description,
-                           std::string (PersonnelData::*getter)() const,
-                           void (PersonnelData::*setter)(std::string const &)) {
-        return ShellMenuEntry{
-            .description = description + " [" + (staged.get()->*getter)() + "]",
-            .callback = [s, staged, description, setter, rebuild]() {
-              s->setInputInstruction("Enter new " + description + ": \n");
-              auto val = s->readLine();
-              s->setInputInstruction("");
-              if (val.empty()) {
-                MCR_CNF_LOG("No changes made to " + description + "\n", s);
-                return;
-              }
-              (staged.get()->*setter)(val);
-              MCR_CNF_LOG("Staged update to " + description + "\n", s);
-            }};
-      };
-
-  auto makeNumericEntry = [s, staged](std::string const &description,
-                                      unsigned (PersonnelData::*getter)() const,
-                                      void (PersonnelData::*setter)(unsigned),
-                                      std::size_t begin, std::size_t end) {
-    return ShellMenuEntry{
-        .description = description + " [" +
-                       std::to_string((staged.get()->*getter)()) + "]",
-        .callback = [s, staged, description, setter, begin, end]() {
-          std::size_t val{};
-          if (!readBounded("Enter new " + description + ": \n", &val, begin,
-                           end, s))
-            return;
-          (staged.get()->*setter)(static_cast<unsigned>(val));
-          MCR_CNF_LOG("Staged update to " + description + "\n", s);
-        }};
-  };
-
-  s->getInterface()->menu.push_back(
-      makeStringEntry("Name", &PersonnelData::getEmployeeName,
-                      &PersonnelData::setEmployeeName));
-  s->getInterface()->menu.push_back(
-      makeStringEntry("Surname", &PersonnelData::getEmployeeSurname,
-                      &PersonnelData::setEmployeeSurname));
-  s->getInterface()->menu.push_back(
-      makeStringEntry("Telephone", &PersonnelData::getEmployeeTelephone,
-                      &PersonnelData::setEmployeeTelephone));
-  s->getInterface()->menu.push_back(
-      makeStringEntry("Email", &PersonnelData::getEmployeeEmail,
-                      &PersonnelData::setEmployeeEmail));
-  s->getInterface()->menu.push_back(
-      makeStringEntry("Card ID", &PersonnelData::getEmployeeCardId,
-                      &PersonnelData::setEmployeeCardId));
-  s->getInterface()->menu.push_back(
-      makeStringEntry("Employee ID", &PersonnelData::getEmployeeId,
-                      &PersonnelData::setEmployeeId));
-  s->getInterface()->menu.push_back(
-      makeNumericEntry("Standard work time (h/week)",
-                       &PersonnelData::getEmployeeStandardWorkTime,
-                       &PersonnelData::setEmployeeStandardWorkTime, 1, 169));
-  s->getInterface()->menu.push_back(makeNumericEntry(
-      "Max work time (h/week)", &PersonnelData::getEmployeeMaxWorkTime,
-      &PersonnelData::setEmployeeMaxWorkTime, 1, 169));
-  s->getInterface()->menu.push_back(
-      makeNumericEntry("Hourly wage", &PersonnelData::getEmployeeHourlyWage,
-                       &PersonnelData::setEmployeeHourlyWage, 1, 100001));
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Role [" + to_string(staged->getEmployeeRole()) + "]",
-      .callback = [s, staged]() {
-        std::size_t roleIdx{};
-        if (!readBounded("Select new role: \n"
-                         "\t1. Employee\n"
-                         "\t2. Driver\n"
-                         "\t3. Manager\n"
-                         "\t4. Admin\n",
-                         &roleIdx, 1, 5, s))
-          return;
-        EmployeeRole role{};
-        switch (roleIdx) {
-        case 1:
-          role = EmployeeRole::Employee;
-          break;
-        case 2:
-          role = EmployeeRole::Driver;
-          break;
-        case 3:
-          role = EmployeeRole::Manager;
-          break;
-        case 4:
-          role = EmployeeRole::Admin;
-          break;
-        }
-        staged->setEmployeeRole(role);
-        MCR_CNF_LOG("Staged update to Role\n", s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = std::string{"Active ["} +
-                     (staged->getEmployeeActive() ? "Yes" : "No") + "]",
-      .callback = [s, staged]() {
-        std::size_t activeIdx{};
-        if (!readBounded("Set active status: \n"
-                         "\t1. Yes\n"
-                         "\t2. No\n",
-                         &activeIdx, 1, 3, s))
-          return;
-        staged->setEmployeeActive(activeIdx == 1);
-        MCR_CNF_LOG("Staged update to Active status\n", s);
-      }});
-
-  // Save — routes through GeneralAdmin when employee selected, directly via
-  // sys when in anonymous admin mode (admin == nullptr)
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Save changes", .callback = [s, e, admin, staged]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-
-        Result result{};
-        if (admin) {
-          result = admin->editEmployee(e->getEmployeeId(), *staged);
-        } else {
-          auto pd = s->getSystem()->getEmployeeInfo(e);
-          if (!pd) {
-            MCR_CNF_LOG("Error: Could not retrieve employee data\n", s);
-            return;
-          }
-          if (pd->getEmployeeId() != staged->getEmployeeId()) {
-            MCR_CNF_LOG("Error: Employee ID must not change\n", s);
-            return;
-          }
-          *pd = *staged;
-          result = Result::Success;
-        }
-
-        if (result != Result::Success) {
-          MCR_CNF_LOG(
-              "Error: Failed to save changes: " + to_string(result) + "\n", s);
-          return;
-        }
-        MCR_CNF_LOG("Changes saved successfully\n", s);
-        s->popMenuState();
-      }});
-
-  s->getInterface()->menu.push_back(
-      ShellMenuEntry{.description = "Discard & back", .callback = [s]() {
-                       MCR_CNF_LOG("Changes discarded\n", s);
-                       s->popMenuState();
-                     }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
-}
-
-void buildAbsenceEmployeeSelectionMenu(Shell *s,
-                                       std::vector<Employee *> const &employees,
-                                       GeneralAdmin *admin) {
-  s->getInterface()->menu.clear();
-
-  for (auto e : employees) {
-    s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = e->getEmployeeName() + " " + e->getEmployeeSurname() +
-                       " ID: " + e->getEmployeeId(),
-        .callback = [s, e, admin]() {
-          std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-
-          std::size_t year, month, day;
-          tu::TimePoint tp;
-          tp.populate();
-
-          if (!readBounded("Enter absence year: \n", &year, tp.year,
-                           tp.year + 1, s)) {
-            s->popMenuState();
-            return;
-          }
-          if (!readBounded("Enter absence month: \n", &month, 1, 13, s)) {
-            s->popMenuState();
-            return;
-          }
-          if (!readBounded("Enter absence day: \n", &day, 1, 32, s)) {
-            s->popMenuState();
-            return;
-          }
-
-          tu::TimePoint absencePoint{.year = unsigned(year),
-                                     .month = unsigned(month),
-                                     .day = unsigned(day),
-                                     .hour = 0,
-                                     .minute = 0};
-
-          Result result{};
-          if (admin)
-            result = admin->setAbsence(e->getEmployeeId(), absencePoint);
-          else
-            result = s->getSystem()->setEmployeeAbsence(e, absencePoint);
-
-          if (result != Result::Success) {
-            MCR_CNF_LOG(
-                "Error: Failed to set absence: " + to_string(result) + "\n", s);
-          } else {
-            MCR_CNF_LOG("Successfully set absence data\n", s);
-          }
-
-          s->popMenuState();
-        }});
+  if (!employeeId.size()) {
+    markArgAsNotValid("employeeId", "The argument is empty", shell);
+    retry = true;
   }
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
-}
-
-void buildEmployeeSelectionMenu(
-    Shell *s,
-    std::vector<std::pair<std::string, Employee *>> const &employees) {
-  s->getInterface()->menu.clear();
-
-  for (auto e : employees) {
-    s->getInterface()->menu.push_back(
-        ShellMenuEntry{.description = e.first, .callback = [s, e]() {
-                         s->pushMenuState();
-                         s->setCurrentEmployeeId(e.second->getEmployeeId());
-
-                         switch (e.second->getEmployeeRole()) {
-                         case EmployeeRole::Employee:
-                           buildEmployeeMenu(s, true);
-                           break;
-                         case EmployeeRole::Driver:
-                           buildDriverMenu(s, true);
-                           break;
-                         case EmployeeRole::Admin:
-                           buildAdminMenu(s, true);
-                           break;
-                         default:
-                           buildManagerMenu(s, true);
-                           break;
-                         }
-                       }});
-  }
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
-}
-
-void appendAdminMenuEntries(Shell *s) {
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Remove employee from system", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto sys = s->getSystem();
-
-        auto emp =
-            sys->getEmployeeBy([](Employee const *, PersonnelData const *,
-                                  AttendanceData const *) { return true; });
-
-        if (emp.empty()) {
-          MCR_CNF_LOG("No employees found in the system\n", s);
-          return;
-        }
-
-        s->pushMenuState();
-        s->getInterface()->menu.clear();
-
-        for (auto e : emp) {
-          s->getInterface()->menu.push_back(ShellMenuEntry{
-              .description = e->getEmployeeName() + " " +
-                             e->getEmployeeSurname() +
-                             " ID: " + e->getEmployeeId(),
-              .callback = [s, e]() {
-                std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-                auto sys = s->getSystem();
-
-                // Confirm before removing
-                std::size_t confirmIdx{};
-                if (!readBounded("Are you sure you want to remove " +
-                                     e->getEmployeeName() + " " +
-                                     e->getEmployeeSurname() +
-                                     "?\n"
-                                     "\t1. Yes\n"
-                                     "\t2. No\n",
-                                 &confirmIdx, 1, 3, s)) {
-                  s->popMenuState();
-                  return;
-                }
-
-                if (confirmIdx == 2) {
-                  s->popMenuState();
-                  return;
-                }
-
-                std::string removeMessage =
-                    "Successfully removed employee: " + e->getEmployeeName() +
-                    " " + e->getEmployeeSurname() +
-                    " ID: " + e->getEmployeeId() + "\n";
-
-                if (!s->getCurrentEmployeeId().empty()) {
-                  auto activeEmp =
-                      sys->getEmployeeById(s->getCurrentEmployeeId());
-                  auto *adminPtr = dynamic_cast<Admin *>(activeEmp);
-                  if (!adminPtr) {
-                    MCR_CNF_LOG(
-                        "Error: Active user does not have remove privileges\n",
-                        s);
-                    s->popMenuState();
-                    return;
-                  }
-                  adminPtr->removeEmployee(e);
-                } else {
-                  auto result = sys->removeEmployee(e->getEmployeeId());
-                  if (result != Result::Success) {
-                    MCR_CNF_LOG("Error: Failed to remove employee: " +
-                                    to_string(result) + "\n",
-                                s);
-                    s->popMenuState();
-                    return;
-                  }
-                }
-
-                MCR_CNF_LOG(removeMessage, s);
-                s->popMenuState();
-              }});
-        }
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-        s->getInterface()->menu.push_back(ShellMenuEntry{
-            .description = "Exit", .callback = [s]() { s->requestExit(); }});
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Edit system settings", .callback = [s]() {
-        Admin *admin = nullptr;
-        if (!s->getCurrentEmployeeId().empty()) {
-          std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-          admin = dynamic_cast<Admin *>(
-              s->getSystem()->getEmployeeById(s->getCurrentEmployeeId()));
-        }
-        s->pushMenuState();
-        buildSettingsMenu(s, admin);
-      }});
-}
-
-bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
-                 std::size_t end, Shell *s) {
-  s->setInputInstruction(prompt);
-  auto value = s->readLine();
-  s->setInputInstruction("");
-
-  std::size_t index{};
+  std::size_t stdWorkTime, maxWorkTime, hourlyWage;
   try {
-    index = std::stoul(value);
+    stdWorkTime =
+        std::stoul(args.at(queue.at(idx)->argLookup.at("stdWorkTime")));
   } catch (...) {
-    MCR_CNF_LOG("'" + value + "' is not a valid value\n", s);
-    return false;
+    markArgAsNotValid("stdWorkTime", "Converting to number failed", shell);
+    retry = true;
   }
 
-  if (index < begin || index >= end) {
-    MCR_CNF_LOG("'" + value + "' is not within the required range: (" +
-                    std::to_string(begin) + ", " + std::to_string(end) + ")\n",
-                s);
-    return false;
+  try {
+    maxWorkTime =
+        std::stoul(args.at(queue.at(idx)->argLookup.at("maxWorkTime")));
+  } catch (...) {
+    markArgAsNotValid("maxWorkTime", "Converting to number failed", shell);
+    retry = true;
   }
 
-  *idx = index;
-  return true;
+  try {
+    hourlyWage = std::stoul(args.at(queue.at(idx)->argLookup.at("hourlyWage")));
+  } catch (...) {
+    markArgAsNotValid("hourlyWage", "Converting to number failed", shell);
+    retry = true;
+  }
+
+  try {
+    active = bool(std::stoi(args.at(queue.at(idx)->argLookup.at("active"))));
+  } catch (...) {
+    markArgAsNotValid("active", "Converting to number failed", shell);
+    retry = true;
+  }
+
+  auto const roleStr = args.at(queue.at(idx)->argLookup.at("role"));
+  es::EmployeeRole role{};
+  if (roleStr == "employee") {
+    role = es::EmployeeRole::Employee;
+  } else if (roleStr == "driver") {
+    role = es::EmployeeRole::Driver;
+  } else if (roleStr == "manager") {
+    role = es::EmployeeRole::Manager;
+  } else if (roleStr == "admin") {
+    role = es::EmployeeRole::Admin;
+  } else {
+    markArgAsNotValid(
+        "role", "Must be one of: employee, driver, manager, admin", shell);
+    retry = true;
+  }
+
+  if (retry)
+    return Result::InputNotValidError;
+
+  es::Employee *e;
+  es::Driver *d;
+  es::Manager *m;
+  es::Admin *a;
+  es::PersonnelData *pd;
+  es::AttendanceData *ad;
+
+  switch (role) {
+  case es::EmployeeRole::Employee:
+    if (auto res = shell->esys->addEmployee(&e, &pd, &ad);
+        res == es::Result::EmployeeIdNotUniqueError)
+      markArgAsNotValid("employeeId", "The supplied id is not unique", shell);
+    else if (res != es::Result::Success)
+      return Result::InputNotValidError;
+    break;
+  case es::EmployeeRole::Driver:
+    if (auto res = shell->esys->addEmployee(&d, &pd, &ad);
+        res == es::Result::EmployeeIdNotUniqueError)
+      markArgAsNotValid("employeeId", "The supplied id is not unique", shell);
+    else if (res != es::Result::Success)
+      return Result::InputNotValidError;
+    break;
+  case es::EmployeeRole::Manager:
+    if (auto res = shell->esys->addEmployee(&m, &pd, &ad);
+        res == es::Result::EmployeeIdNotUniqueError)
+      markArgAsNotValid("employeeId", "The supplied id is not unique", shell);
+    else if (res != es::Result::Success)
+      return Result::InputNotValidError;
+    break;
+  case es::EmployeeRole::Admin:
+    if (auto res = shell->esys->addEmployee(&a, &pd, &ad);
+        res == es::Result::EmployeeIdNotUniqueError)
+      markArgAsNotValid("employeeId", "The supplied id is not unique", shell);
+    else if (res != es::Result::Success)
+      return Result::InputNotValidError;
+    break;
+  default:
+    assert(false && "Unknown employee role is not supported");
+  }
+
+  pd->setEmployeeId(employeeId);
+  pd->setEmployeeName(name);
+  pd->setEmployeeRole(role);
+  pd->setEmployeeEmail(email);
+  pd->setEmployeeActive(active);
+  pd->setEmployeeCardId(cardId);
+  pd->setEmployeeSurname(surname);
+  pd->setEmployeeTelephone(telephone);
+  pd->setEmployeeHourlyWage(hourlyWage);
+  pd->setEmployeeMaxWorkTime(maxWorkTime);
+  pd->setEmployeeStandardWorkTime(stdWorkTime);
+
+  return Result::Success;
 }
 
-void buildSettingsMenu(Shell *s, Admin *admin) {
-  s->getInterface()->menu.clear();
+Result changeState(Shell *shell) {
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  destroyInputMenu(shell);
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Set auto checkout time", .callback = [s, admin]() {
-        std::size_t hour, minute;
-        if (!readBounded("Enter auto checkout hour: \n", &hour, 0, 25, s))
-          return;
-        if (!readBounded("Enter auto checkout minute: \n", &minute, 0, 61, s))
-          return;
+  assert(desc->argLookup.contains("target"));
+  auto nsKey = desc->argLookup.at("target");
 
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        if (admin) {
-          admin->editSettings(SystemSettings::AutoCheckoutHour,
-                              static_cast<unsigned>(hour));
-          admin->editSettings(SystemSettings::AutoCheckoutMinute,
-                              static_cast<unsigned>(minute));
-        } else {
-          s->getSystem()->setAutoCheckoutTime(static_cast<unsigned>(hour),
-                                              static_cast<unsigned>(minute));
-        }
-        s->popMenuState();
-      }});
+  assert(shell->control.argStorage.contains(nsKey));
+  auto newState = shell->control.argStorage.at(nsKey);
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Back", .callback = [s]() { s->popMenuState(); }});
+  bool isValidState = false;
+  for (auto const &[id, data] : shell->states)
+    if (id == newState)
+      isValidState = true;
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+  assert(isValidState);
+
+  shell->control.actionQueue.clear();
+  shell->control.actionIndex = 0;
+
+  if (shell->states.at(newState).empty())  // If the state contains no actions,
+    newState = shell->control.mainStateId; // return to the mainState
+
+  auto &ns = shell->states.at(newState);
+  for (auto &action : ns)
+    shell->control.actionQueue.push_back(&action);
+
+  shell->control.currentStateType =
+      shell->control.actionQueue[shell->control.actionIndex]->type;
+  return Result::Success;
 }
 
-void appendEmployeeMenuEntries(Shell *s) {
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Check-in", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-        if (auto result = emp->checkIn(); result != Result::Success) {
-          MCR_CNF_LOG("Could not check in; Reason: " + to_string(result) + "\n",
-                      s);
-          return;
-        }
-        MCR_CNF_LOG("Successfully checked in\n", s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Check-out", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-        if (auto result = emp->checkOut(); result != Result::Success) {
-          MCR_CNF_LOG(
-              "Could not check out; Reason: " + to_string(result) + "\n", s);
-          return;
-        }
-        MCR_CNF_LOG("Successfully checked out\n", s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Print info", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-
-        if (!emp) {
-          MCR_CNF_LOG("Error: Employee not found\n", s);
-          return;
-        }
-
-        std::ostringstream oss;
-        oss << "Employee info:\n"
-            << "\tName:               " << emp->getEmployeeName() << " "
-            << emp->getEmployeeSurname() << "\n"
-            << "\tID:                 " << emp->getEmployeeId() << "\n"
-            << "\tCard ID:            " << emp->getEmployeeCardId() << "\n"
-            << "\tTelephone:          " << emp->getEmployeeTelephone() << "\n"
-            << "\tEmail:              " << emp->getEmployeeEmail() << "\n"
-            << "\tRole:               " << to_string(emp->getEmployeeRole())
-            << "\n"
-            << "\tStandard work time: " << emp->getEmployeeStandardWorkTime()
-            << "h/week\n"
-            << "\tMax work time:      " << emp->getEmployeeMaxWorkTime()
-            << "h/week\n"
-            << "\tHourly wage:        " << emp->getEmployeeHourlyWage() << "\n"
-            << "\tActive:             "
-            << (emp->getEmployeeActive() ? "Yes" : "No") << "\n";
-
-        MCR_CNF_LOG(oss.str(), s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Calculate pay", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-        if (!emp) {
-          MCR_CNF_LOG("Error: Employee not found\n", s);
-          return;
-        }
-
-        std::size_t year, month;
-        tu::TimePoint tp;
-        tp.populate();
-
-        if (!readBounded("Enter start year: \n", &year, 1970, tp.year + 1, s))
-          return;
-        if (!readBounded("Enter start month: \n", &month, 1, 13, s))
-          return;
-
-        tu::TimePoint start{.year = unsigned(year),
-                            .month = unsigned(month),
-                            .day = 1,
-                            .hour = 0,
-                            .minute = 0};
-
-        auto pay = emp->calculatePay(start);
-
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(2);
-        oss << "Calculated pay for " << emp->getEmployeeName() << " "
-            << emp->getEmployeeSurname() << ": " << pay << "\n";
-
-        MCR_CNF_LOG(oss.str(), s);
-      }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "View attendance", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-        if (!emp) {
-          MCR_CNF_LOG("Error: Employee not found\n", s);
-          return;
-        }
-
-        std::size_t startYear, startMonth, endYear, endMonth;
-        tu::TimePoint tp;
-        tp.populate();
-
-        if (!readBounded("Enter start year: \n", &startYear, 1970, tp.year + 1,
-                         s))
-          return;
-        if (!readBounded("Enter start month: \n", &startMonth, 1, 13, s))
-          return;
-        if (!readBounded("Enter end year: \n", &endYear, 1970, tp.year + 1, s))
-          return;
-        if (!readBounded("Enter end month: \n", &endMonth, 1, 13, s))
-          return;
-
-        tu::TimePeriod range{.begin = {.year = unsigned(startYear),
-                                       .month = unsigned(startMonth),
-                                       .day = 1,
-                                       .hour = 0,
-                                       .minute = 0},
-                             .end = {.year = unsigned(endYear),
-                                     .month = unsigned(endMonth),
-                                     .day = 31,
-                                     .hour = 23,
-                                     .minute = 59},
-                             .type = {}};
-
-        auto records = emp->getAttendanceTable().getRecords(range);
-
-        if (records.empty()) {
-          MCR_CNF_LOG("No attendance records found in the given range\n", s);
-          return;
-        }
-
-        std::string message = "Attendance records:\n";
-        for (auto const &r : records)
-          message += "\t" + to_string(r) + "\n";
-
-        MCR_CNF_LOG(message, s);
-      }});
+Result markArgAsNotValid(std::string const &id, std::string const &reason,
+                         Shell *shell) {
+  assert(shell->control.argStorage.contains(id));
+  auto value = shell->control.argStorage.at(id);
+  shell->control.retryReason.push_back(reason);
+  shell->control.retryVals.push_back(value);
+  shell->control.retryArgs.push_back(id);
+  return Result::Success;
 }
 
-void appendDriverMenuEntries(Shell *s) {
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Log beginning of delivery", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-        if (!emp) {
-          MCR_CNF_LOG("Error: Employee not found\n", s);
-          return;
+Result injectRetrySequence(Shell *shell) {
+  // Find query action prior to the most recent procedure.
+  std::vector<StateActionDesc *> retryQueries{};
+
+  std::size_t idx = shell->control.actionIndex;
+  for (std::size_t i = 0; i < shell->control.actionIndex; ++i) {
+    --idx;
+
+    if (shell->control.actionQueue[idx]->type == StateType::ReadInProgress ||
+        shell->control.actionQueue[idx]->type == StateType::SelectionInProgress)
+      for (auto const &retryTarget : shell->control.retryArgs)
+        if (shell->control.actionQueue[idx]->boundArgs.contains("out") &&
+            shell->control.actionQueue[idx]->boundArgs.at("out") == retryTarget)
+          retryQueries.push_back(shell->control.actionQueue[idx]);
+  }
+
+  assert(retryQueries.size() &&
+         "There must have been a query operation to "
+         "repeat; Otherwise, the operation is not valid");
+
+  std::vector<StateActionDesc *> tmp{};
+  for (std::size_t i = retryQueries.size(); i; --i)
+    tmp.push_back(retryQueries.at(i - 1));
+  retryQueries = std::move(tmp);
+
+  // Inject retry actions into front of action queue.
+  std::vector<StateActionDesc *> newQueue{};
+  auto &retrySt = shell->states.at("__retry");
+  for (auto &action : retrySt)
+    newQueue.push_back(&action);
+
+  // Append query actions that need to be repeated.
+  for (auto actionPtr : retryQueries)
+    newQueue.push_back(actionPtr);
+
+  // Append the remaining actions from the original queue.
+  for (std::size_t i = shell->control.actionIndex;
+       i < shell->control.actionQueue.size(); ++i)
+    newQueue.push_back(shell->control.actionQueue[i]);
+
+  shell->control.actionQueue = std::move(newQueue);
+  shell->control.actionIndex = 0;
+  return Result::Success;
+}
+
+Result handleRetryAnswer(Shell *shell) {
+  assert(shell->control.argStorage.contains("__retry"));
+  bool answer = std::stoi(shell->control.argStorage.at("__retry"));
+  assert(answer == 0 || answer == 1);
+
+  if (!answer)
+    initializeActionQueue(shell);
+  else
+    ++shell->control.actionIndex;
+
+  return Result::Success;
+}
+
+Result populateEntriesWithEmployees(Shell *shell) {
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  std::string filter;
+
+  if (desc->boundArgs.contains("filter"))
+    filter = desc->boundArgs.at("filter");
+
+  auto checkedIn = [](auto const, auto const, auto const a) {
+    return a->getCurrentTimePeriod()->begin.year;
+  };
+
+  auto all = [](auto, auto, auto) { return true; };
+
+  if (filter == "checked-in")
+    shell->control.employees = shell->esys->getEmployeeBy(checkedIn);
+  else
+    shell->control.employees = shell->esys->getEmployeeBy(all);
+
+  if (!shell->control.employees.size()) {
+    shell->control.selectionTitles.push_back("No employees matching criteria");
+    shell->control.selectionValues.push_back("No employees matching criteria");
+  } else {
+    for (auto e : shell->control.employees) {
+      std::string title = e->getEmployeeName() + " ";
+      title += e->getEmployeeSurname() + " (" +
+               es::to_string(e->getEmployeeRole()) + ")";
+      shell->control.selectionTitles.push_back(std::move(title));
+      shell->control.selectionValues.push_back(e->getEmployeeId());
+    }
+    shell->control.selectionTitles.push_back("Back");
+    shell->control.selectionValues.push_back("");
+  }
+  return Result::Success;
+}
+
+Result populateNotifications(Shell *shell) {
+  shell->control.argStorage["prompt"] = "Notifications: ";
+  for (auto const &n : shell->control.autoLoggedOut) {
+    std::string label = n->getEmployeeName() + " " + n->getEmployeeSurname();
+    label += " (" + es::to_string(n->getEmployeeRole()) + ")";
+    shell->control.selectionTitles.push_back(std::move(label));
+    shell->control.selectionValues.push_back("");
+  }
+
+  if (!shell->control.autoLoggedOut.size()) {
+    shell->control.selectionTitles.push_back("No notifications");
+    shell->control.selectionValues.push_back("");
+  }
+
+  return Result::Success;
+}
+
+Result injectNotification(std::string const &prompt,
+                          std::vector<std::string> const &messages,
+                          bool isErrorNotif, Shell *shell) {
+  assert(prompt.size());
+  assert(messages.size());
+  std::vector<StateActionDesc *> queue;
+  auto &actQ = shell->control.actionQueue;
+  auto idx = shell->control.actionIndex;
+
+  assert(shell->states.contains("__notify"));
+  assert(shell->states.at("__notify").size());
+
+  for (auto &act : shell->states.at("__notify"))
+    queue.push_back(&act);
+
+  if (!isErrorNotif)
+    for (++idx; idx < actQ.size(); ++idx)
+      queue.push_back(actQ[idx]);
+
+  shell->control.argStorage["prompt"] = prompt;
+
+  for (auto const &m : messages) {
+    shell->control.selectionTitles.push_back(m);
+    shell->control.selectionValues.push_back("");
+  }
+
+  shell->control.actionIndex = 0;
+  actQ = std::move(queue);
+  return Result::NotificationPending;
+}
+
+Result injectPromptError(std::string const &prompt, Shell *shell) {
+  std::vector<std::string> opts{"OK"};
+  return injectNotification(prompt, opts, true, shell);
+}
+
+Result injectPromptNotif(std::string const &prompt, Shell *shell) {
+  std::vector<std::string> opts{"OK"};
+  return injectNotification(prompt, opts, false, shell);
+}
+
+Result setActiveEmployee(Shell *shell) {
+  if (!shell->control.employees.size()) {
+    // If the input was not available we must return to the main state
+    // and abort the current one. Removing subsequent actions will trigger this.
+    while (shell->control.actionQueue.size() > 1)
+      shell->control.actionQueue.pop_back();
+    return Result::Success;
+  }
+
+  auto const desc = shell->control.actionQueue[shell->control.actionIndex];
+  assert(desc->argLookup.contains("target"));
+  auto const targetId = desc->argLookup.at("target");
+
+  assert(shell->control.argStorage.contains(targetId));
+  auto const id = shell->control.argStorage.at(targetId);
+
+  if (id.empty()) // The back option was chosen
+    return injectPromptNotif("Aborting selection", shell);
+
+  auto empl = shell->esys->getEmployeeById(id);
+  assert(empl);
+
+  shell->control.activeEmployeeId = empl->getEmployeeId();
+  return Result::Success;
+}
+
+Result removeEmployee(Shell *shell) {
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  assert(desc->argLookup.contains("target"));
+  auto nsKey = desc->argLookup.at("target");
+  assert(shell->control.argStorage.contains(nsKey));
+  auto target = shell->control.argStorage.at(nsKey);
+
+  if (shell->control.activeEmployeeId == target)
+    shell->control.activeEmployeeId.clear();
+
+  auto e = shell->esys->getEmployeeById(target);
+  assert(e);
+
+  if (shell->esys->removeEmployee(target) != es::Result::Success)
+    return injectPromptError("Removing employee failed", shell);
+
+  return injectPromptNotif("Successfully removed: " + e->getEmployeeName() +
+                               " " + e->getEmployeeSurname(),
+                           shell);
+}
+
+Result readSystem(Shell *shell) {
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  assert(desc->argLookup.contains("path"));
+  assert(shell->control.argStorage.contains(desc->argLookup.at("path")));
+  auto path = shell->control.argStorage.at(desc->argLookup.at("path"));
+
+  std::unique_ptr<es::EmployeeSystem> sys;
+  try {
+    dp::XMLDataParser p{path};
+    sys = es::EmployeeSystemFactory::create(&p);
+    if (!sys)
+      throw std::runtime_error{""};
+  } catch (...) {
+    injectPromptError("Failed to load system from file", shell);
+    return Result::InternalError;
+  }
+
+  shell->control.activeEmployeeId.clear();
+  shell->esys = std::move(sys);
+  return injectPromptNotif("Successfully loaded system from file", shell);
+}
+
+Result writeSystem(Shell *shell) {
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  assert(desc->argLookup.contains("path"));
+  assert(shell->control.argStorage.contains(desc->argLookup.at("path")));
+  auto path = shell->control.argStorage.at(desc->argLookup.at("path"));
+  assert(shell->esys);
+
+  dp::XMLWriter writer{path};
+  auto empl = shell->esys->getEmployeeBy([](auto, auto, auto) { return 1; });
+
+  for (auto e : empl) {
+    auto id = writer.addEmployee();
+    writer.setEmployeeId(id, e->getEmployeeId());
+    writer.setEmployeeName(id, e->getEmployeeName());
+    writer.setEmployeeSurname(id, e->getEmployeeSurname());
+    writer.setEmployeeRole(id, e->getEmployeeRole());
+    writer.setEmployeeEmail(id, e->getEmployeeEmail());
+    writer.setEmployeeCardId(id, e->getEmployeeCardId());
+    writer.setEmployeeStatus(id, e->getEmployeeActive()
+                                     ? dp::EmployeeStatus::Active
+                                     : dp::EmployeeStatus::Inactive);
+    writer.setEmployeeTelephone(id, e->getEmployeeTelephone());
+    writer.setEmployeeHourlyWage(id, e->getEmployeeHourlyWage());
+    writer.setEmployeeMaxWorkTime(id, e->getEmployeeMaxWorkTime());
+    writer.setEmployeeStandardWorkTime(id, e->getEmployeeStandardWorkTime());
+
+    auto at = shell->esys->getEmployeeAttendance(e);
+    for (const auto &a : at->getRecords())
+      writer.addEmployeeAttendance(id, a);
+  }
+
+  if (auto res = writer.writeData(); res != dp::Result::Success) {
+    injectPromptError("Failed to load system from file", shell);
+    return Result::InternalError;
+  }
+
+  return injectPromptNotif("The system has been successfully written to disk",
+                           shell);
+}
+
+Result setAutoCheckoutTime(Shell *shell) {
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  assert(desc->argLookup.contains("hour"));
+  assert(shell->control.argStorage.contains(desc->argLookup.at("hour")));
+  assert(desc->argLookup.contains("minute"));
+  assert(shell->control.argStorage.contains(desc->argLookup.at("minute")));
+  auto hour = shell->control.argStorage.at(desc->argLookup.at("hour"));
+  auto minute = shell->control.argStorage.at(desc->argLookup.at("minute"));
+  assert(shell->esys);
+
+  unsigned hourN{}, minuteN{};
+  bool ok = true;
+
+  try {
+    hourN = std::stoi(hour);
+  } catch (...) {
+    markArgAsNotValid("hour", "Converting to number failed", shell);
+    ok = false;
+  }
+
+  try {
+    minuteN = std::stoi(minute);
+  } catch (...) {
+    markArgAsNotValid("minute", "Converting to number failed", shell);
+    ok = false;
+  }
+
+  if (minuteN < 1 || minuteN > 60) {
+    markArgAsNotValid("minute", "A valid minute must be in the range [1,60]",
+                      shell);
+    ok = false;
+  }
+
+  if (hourN < 1 || hourN > 24) {
+    markArgAsNotValid("minute", "A valid hour must be in the range [1,24]",
+                      shell);
+    ok = false;
+  }
+
+  if (!ok)
+    return Result::InputNotValidError;
+
+  shell->esys->setAutoCheckoutTime(hourN, minuteN);
+
+  return injectPromptNotif(
+      "Successfully set auto checkout time to " + hour + ":" + minute, shell);
+}
+
+Result executeProcedure(Shell *shell) {
+  if (shell->control.currentStateType != StateType::ProcedureInProgress)
+    return Result::Success;
+
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  Result code{Result::Success};
+
+  switch (desc->id) {
+  case ActionId::ChangeState:
+    changeState(shell);
+    return Result::Success;
+  case ActionId::HandleRetryAnswer:
+    handleRetryAnswer(shell);
+    return Result::Success;
+  case ActionId::AddEmployee:
+    code = addEmployee(shell);
+    break;
+  case ActionId::PopulateEntriesWithEmployees:
+    populateEntriesWithEmployees(shell);
+    break;
+  case ActionId::SetActiveEmployee:
+    setActiveEmployee(shell);
+    break;
+  case ActionId::PopulateNotifications:
+    populateNotifications(shell);
+    break;
+  case ActionId::ClearNotifications:
+    shell->control.notifications.clear();
+    break;
+  case ActionId::ReadSystem:
+    code = readSystem(shell);
+    break;
+  case ActionId::WriteSystem:
+    code = writeSystem(shell);
+    break;
+  case ActionId::SetAutoCheckoutTime:
+    code = setAutoCheckoutTime(shell);
+    break;
+  case ActionId::RemoveEmployee:
+    code = removeEmployee(shell);
+    break;
+  default:
+    assert(false && "desc->id is not registered as a procedure id");
+  }
+
+  if (code == Result::Success) {
+    ++shell->control.actionIndex;
+    if (shell->control.actionIndex >= shell->control.actionQueue.size())
+      initializeActionQueue(shell);
+  } else if (code == Result::InputNotValidError)
+    injectRetrySequence(shell);
+
+  return Result::Success;
+}
+
+Result executeInputRead(Shell *shell) {
+  if (shell->control.currentStateType != StateType::ReadInProgress)
+    return Result::Success;
+
+  auto desc = shell->control.actionQueue[shell->control.actionIndex];
+  if (desc->boundArgs.contains("prompt")) {
+    wmove(shell->ui.inputWin, 1, 1);
+    wclrtoeol(shell->ui.inputWin);
+    mvwprintw(shell->ui.inputWin, 1, 1, "%s %s",
+              desc->boundArgs.at("prompt").c_str(),
+              shell->control.inputBuffer.c_str());
+  }
+
+  if (shell->control.inputReady) {
+    if (desc->boundArgs.contains("out")) {
+      shell->control.argStorage[desc->boundArgs.at("out")] =
+          shell->control.inputBuffer;
+    }
+
+    shell->control.inputBuffer.clear();
+    shell->control.inputReady = false;
+
+    ++shell->control.actionIndex;
+    if (shell->control.actionIndex >= shell->control.actionQueue.size())
+      initializeActionQueue(shell);
+  }
+
+  return Result::Success;
+}
+
+Result updateInputWindow(Shell *shell) {
+  if (auto res = updateInputMenu(shell); res != Result::Success)
+    return res;
+
+  if (auto res = executeInputRead(shell); res != Result::Success)
+    return res;
+
+  if (auto res = stampInputWindow(shell); res != Result::Success)
+    return res;
+
+  using namespace std::chrono;
+  static auto begin = steady_clock::now();
+
+  if (steady_clock::now() - begin > shell->control.spf) {
+    wrefresh(shell->ui.inputWin);
+    begin = steady_clock::now();
+  }
+
+  return Result::Success;
+}
+
+#define MCR_CHK_DEP(inVarId)                                                   \
+  do {                                                                         \
+    auto inVarKeyAttr = action.attribute(inVarId);                             \
+    if (!inVarKeyAttr)                                                         \
+      return Result::MissingInVariableIdError;                                 \
+    std::string inVarKey = inVarKeyAttr.as_string();                           \
+    bool depSatisfied{false};                                                  \
+    for (auto const &a : stateDesc)                                            \
+      if (a.boundArgs.contains("out") && a.boundArgs.at("out") == inVarKey) {  \
+        depSatisfied = true;                                                   \
+        break;                                                                 \
+      }                                                                        \
+    if (!depSatisfied)                                                         \
+      return Result::ProcedureDependencyNotSatisfiedError;                     \
+    desc.argLookup.emplace(inVarId, inVarKey);                                 \
+  } while (0)
+
+Result initializeStateDesc(Shell *shell) {
+  pugi::xml_document doc;
+  if (!doc.load_file("./interface.xml"))
+    return Result::StateDescFileOpenError;
+
+  std::unordered_map<std::string, std::size_t> stateIdOcc;
+  auto root = doc.first_child();
+
+  auto mainState = root.child("state");
+  if (!mainState)
+    return Result::MissingStateError;
+
+  for (auto state = root.child("state"); state;
+       state = state.next_sibling("state")) {
+
+    auto stateIdAttr = state.attribute("id");
+    if (!stateIdAttr)
+      return Result::MissingStateIdError;
+    std::string const stateId = stateIdAttr.as_string();
+
+    if (!stateIdOcc.contains(stateId))
+      stateIdOcc.emplace(stateId, 0);
+    ++stateIdOcc.at(stateId);
+  }
+
+  for (auto const &[id, occ] : stateIdOcc)
+    if (occ > 1)
+      return Result::StateIdNotUniqueError;
+
+  for (auto state = root.child("state"); state;
+       state = state.next_sibling("state")) {
+
+    // Used to make sure there is only one query per var until a procedure
+    std::unordered_map<std::string, std::size_t> argWriteCount;
+    std::vector<StateActionDesc> stateDesc{};
+
+    for (auto action = state.first_child(); action;
+         action = action.next_sibling()) {
+
+      StateActionDesc desc{};
+      std::string const actionId = action.name();
+
+      if (actionId == "select") {
+        desc.type = StateType::SelectionInProgress;
+        desc.id = ActionId::Select;
+
+        auto promptAttr = action.attribute("prompt");
+        if (promptAttr)
+          desc.boundArgs.emplace("prompt", promptAttr.as_string());
+
+        auto outAttr = action.attribute("out");
+        if (outAttr) {
+          std::string out = outAttr.as_string();
+          desc.boundArgs.emplace("out", out);
+          if (!argWriteCount.contains(out))
+            argWriteCount.emplace(out, 0);
+          ++argWriteCount.at(out);
         }
-        auto driver = dynamic_cast<Driver *>(emp);
-        if (!driver) {
-          MCR_CNF_LOG("Error: Employee is not a driver\n", s);
-          return;
+
+        for (auto entry = action.child("entry"); entry;
+             entry = entry.next_sibling("entry")) {
+          auto titleAttr = entry.attribute("title");
+          auto valueAttr = entry.attribute("value");
+          std::string title, value;
+          if (titleAttr)
+            title = titleAttr.as_string();
+          if (valueAttr)
+            value = valueAttr.as_string();
+          desc.selectionTitles.push_back(std::move(title));
+          desc.selectionValues.push_back(std::move(value));
         }
-        if (auto result = driver->logDeliveryBegin();
-            result != Result::Success) {
-          MCR_CNF_LOG("Could not log delivery begin; Reason: " +
-                          to_string(result) + "\n",
-                      s);
-          return;
+      } else if (actionId == "read") {
+        desc.type = StateType::ReadInProgress;
+        desc.id = ActionId::Read;
+
+        auto promptAttr = action.attribute("prompt");
+        if (promptAttr)
+          desc.boundArgs.emplace("prompt", promptAttr.as_string());
+
+        auto outAttr = action.attribute("out");
+        if (outAttr) {
+          std::string out = outAttr.as_string();
+          desc.boundArgs.emplace("out", out);
+          if (!argWriteCount.contains(out))
+            argWriteCount.emplace(out, 0);
+          ++argWriteCount.at(out);
         }
-        MCR_CNF_LOG("Successfully logged beginning of delivery\n", s);
-      }});
+      } else if (actionId == "changeState") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::ChangeState;
+        MCR_CHK_DEP("target");
+      } else if (actionId == "addEmployee") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::AddEmployee;
+        MCR_CHK_DEP("name");
+        MCR_CHK_DEP("surname");
+        MCR_CHK_DEP("telephone");
+        MCR_CHK_DEP("email");
+        MCR_CHK_DEP("cardId");
+        MCR_CHK_DEP("employeeId");
+        MCR_CHK_DEP("stdWorkTime");
+        MCR_CHK_DEP("maxWorkTime");
+        MCR_CHK_DEP("hourlyWage");
+        MCR_CHK_DEP("role");
+        MCR_CHK_DEP("active");
+      } else if (actionId == "populateEntriesWithEmployees") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::PopulateEntriesWithEmployees;
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Log end of delivery", .callback = [s]() {
-        std::lock_guard<std::mutex> lock{s->getSystemGuard()};
-        auto emp = s->getSystem()->getEmployeeById(s->getCurrentEmployeeId());
-        if (!emp) {
-          MCR_CNF_LOG("Error: Employee not found\n", s);
-          return;
+        auto filterAttr = action.attribute("filter");
+        if (filterAttr) {
+          std::string filter = filterAttr.as_string();
+          if (filter != "checked-in") /* || other_supported_filter */
+            return Result::EmployeeFilterNotValidError;
+          desc.boundArgs["filter"] = filter;
         }
-        auto driver = dynamic_cast<Driver *>(emp);
-        if (!driver) {
-          MCR_CNF_LOG("Error: Employee is not a driver\n", s);
-          return;
-        }
-        if (auto result = driver->logDeliveryEnd(); result != Result::Success) {
-          MCR_CNF_LOG(
-              "Could not log delivery end; Reason: " + to_string(result) + "\n",
-              s);
-          return;
-        }
-        MCR_CNF_LOG("Successfully logged end of delivery\n", s);
-      }});
+      } else if (actionId == "setActiveEmployee") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::SetActiveEmployee;
+        MCR_CHK_DEP("target");
+      } else if (actionId == "populateNotifications") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::PopulateNotifications;
+      } else if (actionId == "readSystem") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::ReadSystem;
+        MCR_CHK_DEP("path");
+      } else if (actionId == "writeSystem") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::WriteSystem;
+        MCR_CHK_DEP("path");
+      } else if (actionId == "clearNotifications") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::ClearNotifications;
+      } else if (actionId == "setAutoCheckoutTime") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::SetAutoCheckoutTime;
+        MCR_CHK_DEP("hour");
+        MCR_CHK_DEP("minute");
+      } else if (actionId == "removeEmployee") {
+        desc.type = StateType::ProcedureInProgress;
+        desc.id = ActionId::RemoveEmployee;
+        MCR_CHK_DEP("target");
+      } else
+        return Result::ActionIdNotValidError;
+
+      if (desc.type == StateType::ProcedureInProgress) {
+        for (auto const &[id, occ] : argWriteCount)
+          if (occ > 1)
+            return Result::MultipleWritesToVariablePriorToProcedureError;
+        argWriteCount.clear();
+      }
+
+      stateDesc.push_back(std::move(desc));
+    }
+
+    shell->states.emplace(std::string{state.attribute("id").as_string()},
+                          std::move(stateDesc));
+  }
+
+  shell->control.mainStateId = mainState.attribute("id").as_string();
+  std::vector<StateActionDesc> exitState{
+      StateActionDesc{.type = StateType::ExitInProgress, .id = ActionId::Exit}};
+  assert(!shell->states.contains("exit") && "The exit state id is reserved!");
+  shell->states.emplace("exit", std::move(exitState));
+  return Result::Success;
 }
 
-void buildEmployeeMenu(Shell *s, bool addJmpToPrev) {
-  s->getInterface()->menu.clear();
+Result initializeInternalStates(Shell *handle) {
+  assert(!handle->states.contains("__retry") &&
+         "__retry is a reserved state name!");
 
-  appendEmployeeMenuEntries(s);
+  {
+    std::unordered_map<std::string, std::string> boundArgs1{};
+    boundArgs1.emplace("prompt", "The following arguments were not valid:");
+    std::unordered_map<std::string, std::string> boundArgs2{};
+    boundArgs2.emplace("prompt",
+                       "Would you like to enter the arguments again?");
+    boundArgs2.emplace("out", "__retry");
+    std::unordered_map<std::string, std::string> boundArgs3{};
+    boundArgs3.emplace("answer", "__retry");
 
-  if (addJmpToPrev)
-    s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = "Back", .callback = [s]() { s->popMenuState(); }});
+    std::vector<StateActionDesc> retry{
+        StateActionDesc{.type = StateType::SelectionInProgress,
+                        .id = ActionId::ViewNotValidInput,
+                        .boundArgs = std::move(boundArgs1)},
+        StateActionDesc{.type = StateType::SelectionInProgress,
+                        .id = ActionId::AskToRetryInput,
+                        .boundArgs = std::move(boundArgs2),
+                        .selectionTitles = {"Yes", "No"},
+                        .selectionValues{"1", "0"}},
+        StateActionDesc{.type = StateType::ProcedureInProgress,
+                        .id = ActionId::HandleRetryAnswer,
+                        .boundArgs = std::move(boundArgs3)}};
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+    handle->states.emplace("__retry", std::move(retry));
+  }
 
-  s->setPromptText(buildPromptText(s));
+  assert(!handle->states.contains("__notify") &&
+         "__notify is a reserved state name!");
+
+  {
+    std::unordered_map<std::string, std::string> boundArgs1{};
+    boundArgs1.emplace("prompt", "Notifications:");
+
+    std::vector<StateActionDesc> notify{
+        StateActionDesc{.type = StateType::SelectionInProgress,
+                        .id = ActionId::Notify,
+                        .boundArgs = std::move(boundArgs1)}};
+
+    handle->states.emplace("__notify", std::move(notify));
+  }
+
+  return Result::Success;
 }
 
-void buildDriverMenu(Shell *s, bool addJmpToPrev) {
-  s->getInterface()->menu.clear();
+Result initializeActionQueue(Shell *shell) {
+  auto &state = shell->states.at(shell->control.mainStateId);
+  shell->control.actionQueue.clear();
+  shell->control.actionIndex = 0;
 
-  appendEmployeeMenuEntries(s);
-  appendDriverMenuEntries(s);
+  for (auto &action : state)
+    shell->control.actionQueue.push_back(&action);
 
-  if (addJmpToPrev)
-    s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = "Back", .callback = [s]() { s->popMenuState(); }});
+  assert(state.size());
+  shell->control.currentStateType = state[0].type;
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
-
-  s->setPromptText(buildPromptText(s));
+  if (shell->control.selectionTitles.empty())
+    shell->control.selectionTitles = state[0].selectionTitles;
+  if (shell->control.selectionValues.empty())
+    shell->control.selectionValues = state[0].selectionValues;
+  return Result::Success;
 }
 
-void buildManagerMenu(Shell *s, bool addJmpToPrev) {
-  s->getInterface()->menu.clear();
+Result initializeInterface(Shell *shell) {
+  keypad(stdscr, 1);
+  start_color();
+  halfdelay(1);
+  curs_set(0);
 
-  if (s->getCurrentEmployeeId().size())
-    appendEmployeeMenuEntries(s);
-  appendGeneralAdminMenuEntries(s);
+  auto const ui = &shell->ui;
+  int const cHeight = 5;
+  int height, width;
 
-  if (addJmpToPrev)
-    s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = "Back", .callback = [s]() { s->popMenuState(); }});
+  getmaxyx(stdscr, height, width);
+  ui->clockWin = newwin(cHeight, width, 0, 0);
+  ui->inputWin = newwin(height - cHeight, width, cHeight, 0);
+  keypad(ui->inputWin, 1);
+  shell->ui.selectSub = derwin(shell->ui.inputWin, 0, 0, 2, 1);
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+  init_pair(1, COLOR_YELLOW, COLOR_BLACK);
+  init_pair(2, COLOR_BLACK, COLOR_YELLOW);
 
-  s->setPromptText(buildPromptText(s));
+  wattron(ui->clockWin, COLOR_PAIR(1));
+  wattron(ui->inputWin, COLOR_PAIR(1));
+  return Result::Success;
 }
 
-void buildAdminMenu(Shell *s, bool addJmpToPrev) {
-  s->getInterface()->menu.clear();
-
-  if (s->getCurrentEmployeeId().size())
-    appendEmployeeMenuEntries(s);
-  appendGeneralAdminMenuEntries(s);
-  appendAdminMenuEntries(s);
-
-  if (addJmpToPrev)
-    s->getInterface()->menu.push_back(ShellMenuEntry{
-        .description = "Back", .callback = [s]() { s->popMenuState(); }});
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
-
-  s->setPromptText(buildPromptText(s));
+Result updateMenuPrompt(Shell *shell) {
+  auto const &prompt = shell->ui.selection->prompt;
+  wmove(shell->ui.inputWin, 1, 1);
+  wclrtoeol(shell->ui.inputWin);
+  mvwprintw(shell->ui.inputWin, 1, 1, "%s", prompt.c_str());
+  return Result::Success;
 }
 
-void buildMainMenu(Shell *s) {
-  s->getInterface()->menu.clear();
+Result createInputMenu(std::string const &prompt,
+                       std::vector<std::string> const &entries, Shell *shell) {
+  assert(entries.size());
+  auto &select = shell->ui.selection;
+  assert(!select);
+  select = new InputMenu{};
+  select->itemCount = entries.size();
 
-  appendGeneralAdminMenuEntries(s);
-  appendAdminMenuEntries(s);
+  select->items = (ITEM **)calloc(select->itemCount + 1, sizeof(ITEM *));
+  select->items[select->itemCount] = 0;
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Initialize system from disk", .callback = [s]() {
-        s->setInputInstruction("Enter path to data storage: \n");
-        auto path = s->readLine();
-        s->setInputInstruction("");
+  for (std::size_t i = 0; i < select->itemCount; ++i) {
+    char const *title = entries.at(i).c_str();
+    assert(title);
+    select->items[i] = new_item(title, "");
+    assert(select->items[i]);
+  }
 
-        try {
-          dp::XMLDataParser parser{path};
-          auto system = EmployeeSystemFactory::create(&parser);
-          s->setSystem(std::move(system));
-          buildAdminMenu(s, false);
-        } catch (std::exception const &e) {
-          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
-                      s);
-          return;
-        } catch (...) {
-          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
-          return;
-        }
+  select->handle = new_menu(select->items);
+  select->prompt = prompt;
+  updateMenuPrompt(shell);
 
-        MCR_CNF_LOG("Success: Loaded employee system from disk.\n", s);
-      }});
+  set_menu_win(select->handle, shell->ui.inputWin);
+  set_menu_sub(select->handle, shell->ui.selectSub);
 
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Exit", .callback = [s]() { s->requestExit(); }});
+  set_menu_fore(select->handle, COLOR_PAIR(2) | A_BOLD);
+  set_menu_back(select->handle, COLOR_PAIR(1));
+  set_menu_mark(select->handle, " * ");
 
-  s->setPromptText("(Admin)> ");
+  post_menu(select->handle);
+  return Result::Success;
 }
 
-void Shell::pushMenuState() {
-  MenuState state{};
-  state.menu = ui_.menu.get();
-  state.currentEmployeeId = getCurrentEmployeeId();
-  state.inputInstruction = ui_.inputInstruction.get();
-  state.prompt = ui_.prompt.get();
+Result updateInputMenu(Shell *shell) {
+  // Build the menu if necessary
+  if (!shell->ui.selection &&
+      shell->control.currentStateType == StateType::SelectionInProgress) {
+    auto desc = shell->control.actionQueue[shell->control.actionIndex];
 
-  previousMenus_.push_back(std::move(state));
+    if (shell->control.selectionTitles.empty())
+      shell->control.selectionTitles = desc->selectionTitles;
+    if (shell->control.selectionValues.empty())
+      shell->control.selectionValues = desc->selectionValues;
+
+    if (desc->id == ActionId::ViewNotValidInput) {
+      shell->control.selectionTitles.clear();
+      shell->control.selectionValues.clear();
+
+      assert(shell->control.retryArgs.size() ==
+             shell->control.retryReason.size());
+      assert(shell->control.retryArgs.size() ==
+             shell->control.retryVals.size());
+      assert(shell->control.retryArgs.size());
+
+      std::string title;
+      for (std::size_t i = 0; i < shell->control.retryArgs.size(); ++i) {
+        title = "ID: " + shell->control.retryArgs[i] + ", Value: " +
+                (shell->control.retryVals[i].size()
+                     ? "'" + shell->control.retryVals[i] + "'"
+                     : "<EMPTY>") +
+                ", Reason: " + shell->control.retryReason[i];
+        shell->control.selectionTitles.push_back(std::move(title));
+      }
+
+      shell->control.retryReason.clear();
+      shell->control.retryArgs.clear();
+      shell->control.retryVals.clear();
+    }
+
+    std::string prompt{};
+    if (shell->control.argStorage.contains("prompt") &&
+        shell->control.argStorage.at("prompt").size())
+      prompt = shell->control.argStorage.at("prompt");
+    else if (desc->boundArgs.contains("prompt"))
+      prompt = desc->boundArgs.at("prompt");
+    createInputMenu(prompt, shell->control.selectionTitles, shell);
+  }
+
+  if (shell->ui.selection &&
+      shell->control.currentStateType == StateType::SelectionInProgress) {
+
+    if (shell->control.signalReady) {
+      switch (shell->control.signal) {
+      case KEY_UP:
+      case 'k':
+        menu_driver(shell->ui.selection->handle, REQ_UP_ITEM);
+        shell->control.signalReady = false;
+        break;
+      case KEY_DOWN:
+      case 'j':
+        menu_driver(shell->ui.selection->handle, REQ_DOWN_ITEM);
+        shell->control.signalReady = false;
+        break;
+      default:
+        break;
+      }
+    }
+
+    if (shell->control.inputReady) {
+      auto desc = shell->control.actionQueue[shell->control.actionIndex];
+      if (desc->boundArgs.contains("out")) {
+        auto idx = getInputMenuSelection(shell);
+        shell->control.argStorage[desc->boundArgs.at("out")] =
+            shell->control.selectionValues.at(idx).size()
+                ? shell->control.selectionValues.at(idx)
+                : std::to_string(idx);
+      }
+
+      shell->control.inputReady = false;
+      ++shell->control.actionIndex;
+      if (shell->control.actionIndex >= shell->control.actionQueue.size())
+        initializeActionQueue(shell);
+      else
+        shell->control.currentStateType =
+            shell->control.actionQueue[shell->control.actionIndex]->type;
+
+      shell->control.selectionTitles.clear();
+      shell->control.selectionValues.clear();
+      destroyInputMenu(shell);
+
+      if (shell->control.argStorage.contains("prompt"))
+        shell->control.argStorage.at("prompt").clear();
+    }
+  }
+
+  return Result::Success;
 }
 
-void Shell::popMenuState() {
-  if (!previousMenus_.size())
-    throw std::runtime_error{
-        "Reverting to a previous menu state was requested, "
-        "but no previous menu exists"};
-
-  auto state = std::move(previousMenus_.back());
-  previousMenus_.pop_back();
-
-  ui_.menu.set(std::move(state.menu));
-  setCurrentEmployeeId(std::move(state.currentEmployeeId));
-  ui_.inputInstruction.set(std::move(state.inputInstruction));
-  ui_.prompt.set(std::move(state.prompt));
+std::size_t getInputMenuSelection(Shell *shell) {
+  auto &select = shell->ui.selection;
+  assert(select->handle);
+  return item_index(current_item(select->handle));
 }
-} // namespace es
+
+void destroyInputMenu(Shell *shell) {
+  if (!shell->ui.selection)
+    return;
+
+  auto &select = shell->ui.selection;
+  unpost_menu(select->handle);
+  free_menu(select->handle);
+
+  for (std::size_t i = 0; i < select->itemCount; ++i)
+    free_item(select->items[i]);
+
+  free(select->items);
+
+  delete select;
+  select = nullptr;
+}
+
+Result stampInputWindow(Shell *shell) {
+  constexpr static char const *head = "Work Time Tracking System (WTTTS)";
+
+  auto const handle = shell->ui.inputWin;
+  int width;
+  width = getmaxx(stdscr);
+
+  box(handle, 0, 0);
+  mvwprintw(handle, 0, width / 2 - strlen(head) / 2, "%s", head);
+  return Result::Success;
+}
+
+Result updateBanner(Shell *shell) {
+  auto const handle = shell->ui.clockWin;
+  int width;
+  width = getmaxx(stdscr);
+
+  using namespace std::chrono;
+  auto now = system_clock::to_time_t(system_clock::now());
+  auto text = std::ctime(&now);
+  wmove(handle, 1, 0);
+  wclrtoeol(handle);
+  mvwprintw(handle, 1, width / 2 - strlen(text) / 2, "%s", text);
+
+  wmove(handle, 2, 0);
+  wclrtoeol(handle);
+  auto notifs = std::to_string(shell->control.notifications.size());
+  notifs += " notifications";
+  mvwprintw(handle, 2, width / 2 - notifs.size() / 2, "%s", notifs.c_str());
+
+  wmove(handle, 3, 0);
+  wclrtoeol(handle);
+  std::string activeEmpl = "User: ";
+  if (shell->control.activeEmployeeId.size()) {
+    auto const id = shell->control.activeEmployeeId;
+    assert(shell->esys);
+    auto empl = shell->esys->getEmployeeById(id);
+    assert(empl);
+    activeEmpl += empl->getEmployeeName() + " ";
+    activeEmpl += empl->getEmployeeSurname() + " (";
+    activeEmpl += es::to_string(empl->getEmployeeRole()) + ")";
+  } else
+    activeEmpl += "<DEFAULT>";
+  mvwprintw(handle, 3, width / 2 - activeEmpl.size() / 2, "%s",
+            activeEmpl.c_str());
+
+  box(handle, 0, 0);
+  wrefresh(handle);
+
+  return Result::Success;
+}
+
+void updateInputBuffer(Shell *shell) {
+  if (!shell->ui.inputWin)
+    return;
+  int ch = wgetch(shell->ui.inputWin);
+
+  switch (ch) {
+  case '\n':
+    shell->control.inputReady = true;
+    break;
+  case 127:
+    if (shell->control.inputBuffer.size())
+      shell->control.inputBuffer.pop_back();
+    break;
+  default:
+    if (shell->control.currentStateType == StateType::ReadInProgress &&
+        std::isprint(ch))
+      shell->control.inputBuffer.push_back(ch);
+    else {
+      shell->control.signalReady = true;
+      shell->control.signal = ch;
+    }
+  }
+}
+
+void destroyShell(Shell *handle) {
+  delwin(handle->ui.clockWin);
+  delwin(handle->ui.inputWin);
+  destroyInputMenu(handle);
+  delete handle;
+  endwin();
+}
+
+Result createShell(Shell **handle) {
+  if (!initscr())
+    return Result::NcursesInitError;
+  if (!handle)
+    return Result::NullptrHandleError;
+  auto ptr = new Shell{};
+  if (!ptr)
+    return Result::ShellMemAllocError;
+  *handle = ptr;
+  return Result::Success;
+}
+
+std::string to_string(Result value) {
+  std::string out;
+
+  switch (value) {
+  case Result::Success:
+    out = "Success";
+    break;
+  case Result::NotificationPending:
+    out = "NotificationPending";
+    break;
+  case Result::InternalError:
+    out = "InternalError";
+    break;
+  case Result::InputNotValidError:
+    out = "InputNotValidError";
+    break;
+  case Result::MissingStateError:
+    out = "MissingStateError";
+    break;
+  case Result::EmployeeFilterNotValidError:
+    out = "EmployeeFilterNotValidError";
+    break;
+  case Result::MissingInVariableIdError:
+    out = "MissingInVariableIdError";
+    break;
+  case Result::ProcedureDependencyNotSatisfiedError:
+    out = "ProcedureDependencyNotSatisfiedError";
+    break;
+  case Result::MissingStateIdError:
+    out = "MissingStateIdError";
+    break;
+  case Result::StateIdNotUniqueError:
+    out = "StateIdNotUniqueError";
+    break;
+  case Result::ActionIdNotValidError:
+    out = "ActionIdNotValidError";
+    break;
+  case Result::MultipleWritesToVariablePriorToProcedureError:
+    out = "MultipleWritesToVariablePriorToProcedureError";
+    break;
+  case Result::StateDescFileOpenError:
+    out = "StateDescFileOpenError";
+    break;
+  case Result::NullptrHandleError:
+    out = "NullptrHandleError";
+    break;
+  case Result::ShellMemAllocError:
+    out = "ShellMemAllocError";
+    break;
+  case Result::NcursesInitError:
+    out = "NcursesInitError";
+    break;
+  }
+
+  return out;
+}
+} // namespace sh

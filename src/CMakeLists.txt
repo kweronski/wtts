@@ -1,7 +1,7 @@
-set(CMAKE_BUILD_RPATH ${CMAKE_BUILD_RPATH} /usr/local/lib64)
-set(CMAKE_INSTALL_RPATH ${CMAKE_BUILD_RPATH} /usr/local/lib64)
+find_package(Curses REQUIRED)
 
-add_compile_options(-O0 -g -Werror -Wall -Wextra -Wpedantic)
+add_compile_options(-O0 -g -pg -Werror -Wall -Wextra -Wpedantic)
+#add_compile_options(-O3 -Wall -Wextra -Wpedantic)
 
 add_library(dataparser
 	dataParser/xmlParser.cpp
@@ -21,9 +21,9 @@ add_library(employeeSystem
 	employeeSystem/interactiveCLI.cpp
 	employeeSystem/esResult.cpp
 	logInfo.cpp)
-target_link_libraries(employeeSystem PRIVATE dataparser)
+target_link_libraries(employeeSystem PRIVATE dataparser pugixml::pugixml)
 
 add_executable(wttsapp main.cpp)
-target_link_libraries(wttsapp PRIVATE employeeSystem -lpthread)
+target_link_libraries(wttsapp PRIVATE employeeSystem ncurses menu panel form)
 
 add_subdirectory(dataParser/test)

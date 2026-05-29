@@ -1,212 +1,32 @@
 #pragma once
 
-#include <atomic>
-#include <chrono>
-#include <functional>
-#include <iostream>
-#include <mutex>
-#include <wtts/employeeSystem.hpp>
+#include <string>
 
-namespace es {
-/* Represents a mutable CLI menu action.
- * The callback may update menu state, trigger side effects,
- * or redirect control flow.
- */
-template <typename F> struct MenuEntry {
-  std::string description;
-  F callback;
+namespace sh {
+enum class Result {
+  Success,
+  NullptrHandleError,
+  ShellMemAllocError,
+  NcursesInitError,
+  StateDescFileOpenError,
+  MissingStateIdError,
+  StateIdNotUniqueError,
+  ActionIdNotValidError,
+  MultipleWritesToVariablePriorToProcedureError,
+  MissingInVariableIdError,
+  ProcedureDependencyNotSatisfiedError,
+  EmployeeFilterNotValidError,
+  MissingStateError,
+  InputNotValidError,
+  InternalError,
+  NotificationPending
 };
 
-using ShellMenuEntry = MenuEntry<std::function<void()>>;
+std::string to_string(Result);
 
-class Shell;
-// All build functions clear the existing menu
-void buildMainMenu(Shell *s);
-void buildAdminMenu(Shell *s, bool addJmpToPrev);
-void buildManagerMenu(Shell *s, bool addJmpToPrev);
-void buildDriverMenu(Shell *s, bool addJmpToPrev);
-void buildEmployeeMenu(Shell *s, bool addJmpToPrev);
+struct Shell;
 
-void buildEmployeeSelectionMenu(
-    Shell *, std::vector<std::pair<std::string, Employee *>> const &);
-
-void buildPaymentListMenu(Shell *, std::vector<Employee *> const &);
-void buildPaymentListMenu(Shell *, GeneralAdmin *);
-
-void buildAbsenceEmployeeSelectionMenu(Shell *, std::vector<Employee *> const &,
-                                       GeneralAdmin *admin = nullptr);
-
-void buildSettingsMenu(Shell *s, Admin *admin = nullptr);
-
-void buildEditEmployeeMenu(Shell *s, Employee *e, GeneralAdmin *admin,
-                           std::shared_ptr<PersonnelData> shared = {});
-
-// All menu entry appending functions do not clear the existing menu
-void appendGeneralAdminMenuEntries(Shell *s);
-void appendAdminMenuEntries(Shell *s);
-void appendEmployeeMenuEntries(Shell *s);
-void appendDriverMenuEntries(Shell *s);
-
-bool readBounded(std::string const &prompt, std::size_t *idx, std::size_t begin,
-                 std::size_t end, Shell *s);
-
-/* Wraps a resource together with its associated mutex.
- * Provides synchronized access without requiring callers
- * to manage locking explicitly.
- */
-template <typename T> struct GuardedResource {
-private:
-  mutable std::mutex guard;
-  T resource;
-
-public:
-  using value_type = T;
-
-  template <typename... Pack>
-  GuardedResource(Pack &&...args) : resource{std::forward<Pack>(args)...} {}
-
-  void set(T &&value) {
-    std::lock_guard<std::mutex> lock{guard};
-    resource = std::move(value);
-  }
-  void set(T const &value) {
-    std::lock_guard<std::mutex> lock{guard};
-    resource = value;
-  }
-
-  template <typename V> void push_back(V &&value) {
-    std::lock_guard<std::mutex> lock{guard};
-    resource.push_back(std::move(value));
-  }
-
-  template <typename V> void push_back(V const &value) {
-    std::lock_guard<std::mutex> lock{guard};
-    resource.push_back(value);
-  }
-
-  void pop_back() {
-    std::lock_guard<std::mutex> lock{guard};
-    resource.pop_back();
-  }
-
-  void clear() {
-    std::lock_guard<std::mutex> lock{guard};
-    resource.clear();
-  }
-
-  std::size_t size() const {
-    std::lock_guard<std::mutex> lock{guard};
-    return resource.size();
-  }
-
-  T get() const {
-    std::lock_guard<std::mutex> lock{guard};
-    return resource;
-  }
-
-  template <typename V> V merge() {
-    std::lock_guard<std::mutex> lock{guard};
-    V v;
-    for (auto const &e : resource)
-      v += e;
-    return v;
-  }
-
-  template <typename K> auto at(K const &key) {
-    std::lock_guard<std::mutex> lock{guard};
-    return resource.at(key);
-  }
-
-  operator T() const {
-    std::lock_guard<std::mutex> lock{guard};
-    return static_cast<T>(resource);
-  }
-};
-
-/* Used to restore menu state when returning from sub menus.
- */
-struct MenuState {
-  std::vector<ShellMenuEntry> menu;
-  std::string inputInstruction;
-  std::string prompt;
-  std::string currentEmployeeId;
-};
-
-/* Contains data used to render the CLI interface.
- * Each data member that may be used concurrently,
- * has its own mutex.
- */
-struct UserInterface {
-  GuardedResource<std::string> greeting;
-  GuardedResource<std::vector<ShellMenuEntry>> menu;
-  GuardedResource<std::string> inputInstruction;
-  GuardedResource<std::string> prompt;
-  GuardedResource<std::string> date;
-  GuardedResource<std::chrono::milliseconds> tick{
-      std::size_t((1.0 / 60.0) * 1000.0)};
-  GuardedResource<std::chrono::time_point<std::chrono::system_clock>>
-      lastRefresh;
-  GuardedResource<std::vector<char>> buf; // Stores input
-};
-
-/* Provides an interactive CLI interface to the employee system while
- * simulating time progression for auto-logout behavior.
- */
-class Shell {
-public:
-  Shell(std::istream &in, std::ostream &out) : input_{in}, output_{out} {
-    buildMainMenu(this);
-  }
-
-  template <typename... P> void write(P &&...args) {
-    std::lock_guard<std::mutex> lock{consoleGuardOut_};
-    (output_ << ... << args) << std::flush;
-  }
-  void run();
-  void greet();
-  void renderUserInterface();
-  std::size_t readIndex();
-  std::string readLine();
-  void requestExit() { exit_ = true; }
-  void setInputInstruction(std::string s) {
-    ui_.inputInstruction.set(std::move(s));
-  }
-  void setPromptText(std::string s) { ui_.prompt.set(std::move(s)); }
-  std::string getPromptText() const { return ui_.prompt.get(); }
-
-  void setCurrentEmployeeId(std::string id) {
-    currentEmployeeId_ = std::move(id);
-  }
-  std::string getCurrentEmployeeId() const { return currentEmployeeId_; }
-
-  void setSystem(std::unique_ptr<EmployeeSystem> s) { system_ = std::move(s); }
-  EmployeeSystem *getSystem() { return system_.get(); }
-  std::mutex &getSystemGuard() { return systemGuard_; }
-  std::mutex &getConsoleGuardIn() { return consoleGuardIn_; }
-
-  UserInterface *getInterface() { return &ui_; }
-
-  void handleInput();
-  void autoCheckout();
-
-  void pushMenuState();
-  void popMenuState();
-
-private:
-  std::unique_ptr<EmployeeSystem> system_{std::make_unique<EmployeeSystem>()};
-  std::mutex systemGuard_;
-
-  std::string currentEmployeeId_;
-  std::string targetEmployeeId_;
-
-  std::istream &input_;
-  std::ostream &output_;
-
-  std::list<MenuState> previousMenus_;
-  UserInterface ui_;
-
-  std::mutex consoleGuardOut_;
-  std::mutex consoleGuardIn_;
-  std::atomic<bool> exit_{0};
-};
-} // namespace es
+Result createShell(Shell **handle);
+void destroyShell(Shell *handle);
+Result run(Shell *handle);
+} // namespace sh

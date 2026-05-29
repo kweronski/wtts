@@ -1,0 +1,118 @@
+<root>
+<state id="main">
+	<select prompt="What would you like to do?" out="targetState">
+		<entry value="view_notifications" title="View Notifications"/>
+		<entry value="set_employee_absence" title="Set Employee Absence"/>
+		<entry value="view_employee_attendance" title="View Employee Attendance"/>
+		<entry value="calculate_employee_pay" title="Calculate Employee Pay"/>
+		<entry value="edit_employee_info" title="Edit Employee Info"/>
+		<entry value="add_employee" title="Add Employee"/>
+		<entry value="print_payment_list" title="Print Payment List"/>
+		<entry value="view_checked_in_employees" title="View Checked-in Employees"/>
+		<entry value="view_all_employees" title="View All Employees"/>
+		<entry value="select_employee" title="Select Employee"/>
+		<entry value="remove_employee" title="Remove Employee"/>
+		<entry value="edit_system_settings" title="Edit System Settings"/>
+		<entry value="read_system_from_file" title="Read System From File"/>
+		<entry value="write_system_to_file" title="Write System To File"/>
+		<entry value="exit" title="Exit"/>
+	</select>
+	<changeState target="targetState"/>
+</state>
+
+<state id="view_notifications">
+	<populateNotifications/>
+	<select/>
+	<clearNotifications/>
+</state>
+
+<state id="set_employee_absence">
+</state>
+
+<state id="view_employee_attendance">
+</state>
+
+<state id="calculate_employee_pay">
+</state>
+
+<state id="edit_employee_info">
+</state>
+
+<state id="add_employee">
+	<read prompt="Enter employee name:" out="name"/>
+	<read prompt="Enter employee surname:" out="surname"/>
+	<read prompt="Enter employee telephone:" out="telephone"/>
+	<read prompt="Enter employee email:" out="email"/>
+	<read prompt="Enter employee card ID:" out="cardId"/>
+	<read prompt="Enter employee ID:" out="employeeId"/>
+	<read prompt="Enter standard work time (hours/day):" out="stdWorkTime"/>
+	<read prompt="Enter maximum work time (hours/day):" out="maxWorkTime"/>
+	<read prompt="Enter hourly wage:" out="hourlyWage"/>
+
+	<select prompt="Select role:" out="role">
+		<entry title="Employee" value="employee"/>
+		<entry title="Driver" value="driver"/>
+		<entry title="Manager" value="manager"/>
+		<entry title="Admin" value="admin"/>
+	</select>
+
+	<select prompt="Set employee as active?" out="active">
+		<entry title="Yes" value="1"/>
+		<entry title="No" value="0"/>
+	</select>
+
+	<addEmployee name="name" surname="surname" telephone="telephone"
+		email="email" cardId="cardId" employeeId="employeeId"
+		stdWorkTime="stdWorkTime" maxWorkTime="maxWorkTime"
+		hourlyWage="hourlyWage" role="role" active="active"/>
+</state>
+
+<state id="print_payment_list">
+</state>
+
+<state id="view_checked_in_employees">
+	<populateEntriesWithEmployees filter="checked-in"/>
+	<select prompt="Viewing all checked-in employees"/>
+</state>
+
+<state id="view_all_employees">
+	<populateEntriesWithEmployees/>
+	<select prompt="Viewing all employees:"/>
+</state>
+
+<state id="select_employee">
+	<populateEntriesWithEmployees/>
+	<select prompt="Select an employee:" out="employee"/>
+	<setActiveEmployee target="employee"/>
+</state>
+
+<state id="remove_employee">
+	<populateEntriesWithEmployees/>
+	<select prompt="Select an employee:" out="employee"/>
+	<removeEmployee target="employee"/>
+</state>
+
+<state id="edit_system_settings">
+	<select prompt="What settings would you like to change?" out="setting">
+		<entry title="Set Auto Check-out Time" value="set_auto_checkout_time"/>
+		<entry title="Back" value="main"/>
+	</select>
+	<changeState target="setting"/>
+</state>
+
+<state id="set_auto_checkout_time">
+	<read prompt="Enter auto checkout hour:" out="hour"/>
+	<read prompt="Enter auto checkout minute:" out="minute"/>
+	<setAutoCheckoutTime hour="hour" minute="minute"/>
+</state>
+
+<state id="read_system_from_file">
+	<read prompt="Enter path to file:" out="sysReadPath"/>
+	<readSystem path="sysReadPath"/>
+</state>
+
+<state id="write_system_to_file">
+	<read prompt="Enter where to save the system:" out="sysWritePath"/>
+	<writeSystem path="sysWritePath"/>
+</state>
+</root>

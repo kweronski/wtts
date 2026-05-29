@@ -4,8 +4,8 @@
 
 namespace dp {
 XMLDataParser::XMLDataParser(std::string const &url)
-    : DataParser(url), document_{new pugi::xml_document{},
-                                 [](auto p) { delete p; }},
+    : DataParser(url),
+      document_{new pugi::xml_document{}, [](auto p) { delete p; }},
       storage_{new DataStorage{}, [](auto p) { delete p; }} {}
 
 #ifdef MCR_XML_NODE
@@ -106,15 +106,15 @@ XMLDataParser::XMLDataParser(std::string const &url)
             Result::MissingAttendanceBeginMinuteError, std::stoul);            \
                                                                                \
     MCR_NUM(time.end.year, year, node.child("end"),                            \
-            Result::MissingAttendanceBeginYearError, std::stoul);              \
+            Result::MissingAttendanceEndYearError, std::stoul);                \
     MCR_NUM(time.end.month, month, node.child("end"),                          \
-            Result::MissingAttendanceBeginMonthError, std::stoul);             \
+            Result::MissingAttendanceEndMonthError, std::stoul);               \
     MCR_NUM(time.end.day, day, node.child("end"),                              \
-            Result::MissingAttendanceBeginDayError, std::stoul);               \
+            Result::MissingAttendanceEndDayError, std::stoul);                 \
     MCR_NUM(time.end.hour, hour, node.child("end"),                            \
-            Result::MissingAttendanceBeginHourError, std::stoul);              \
+            Result::MissingAttendanceEndHourError, std::stoul);                \
     MCR_NUM(time.end.minute, minute, node.child("end"),                        \
-            Result::MissingAttendanceBeginMinuteError, std::stoul);            \
+            Result::MissingAttendanceEndMinuteError, std::stoul);              \
   }
 
 Result XMLDataParser::loadData() {

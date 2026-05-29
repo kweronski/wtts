@@ -20,13 +20,13 @@ XMLWriter::XMLWriter(std::string const &url)
   } while (0)
 
 #ifdef MCR_INS_ATT
-#error "MCR_INS_ATT is laready defined"
+#error "MCR_INS_ATT is already defined"
 #endif
 
-#define MCR_INS_ATT(tp)                                                        \
+#define MCR_INS_ATT(name, tp)                                                  \
   {                                                                            \
     auto n = inst.append_child();                                              \
-    n.set_name("begin");                                                       \
+    n.set_name(name);                                                          \
     pugi::xml_attribute y = n.append_attribute("year");                        \
     y.set_value(tp.year);                                                      \
     pugi::xml_attribute m = n.append_attribute("month");                       \
@@ -47,22 +47,28 @@ Result XMLWriter::writeData() const {
 
   for (auto const &empl : storage_->employees) {
     pugi::xml_node e = root.append_child();
+    e.set_name("employee");
+    pugi::xml_node personal = e.append_child();
+    personal.set_name("personalInfo");
+    pugi::xml_node emplInf = e.append_child();
+    emplInf.set_name("employeeInfo");
 
     pugi::xml_attribute active = e.append_attribute("active");
     active.set_value(empl.status == EmployeeStatus::Active ? "true" : "false");
 
-    MCR_ADD_CWV(e, "name", empl.name.c_str());
-    MCR_ADD_CWV(e, "surname", empl.surname.c_str());
-    MCR_ADD_CWV(e, "telephone", empl.telephone.c_str());
-    MCR_ADD_CWV(e, "email", empl.email.c_str());
-    MCR_ADD_CWV(e, "id", empl.id.c_str());
-    MCR_ADD_CWV(e, "stdWorkTime", empl.standardWorkTime);
-    MCR_ADD_CWV(e, "maxWorkTime", empl.maxWorkTime);
-    MCR_ADD_CWV(e, "hourlyWage", empl.hourlyWage);
-    MCR_ADD_CWV(e, "role", empl.cardId.c_str());
+    MCR_ADD_CWV(personal, "name", empl.name.c_str());
+    MCR_ADD_CWV(personal, "surname", empl.surname.c_str());
+    MCR_ADD_CWV(personal, "telephone", empl.telephone.c_str());
+    MCR_ADD_CWV(personal, "email", empl.email.c_str());
+
+    MCR_ADD_CWV(emplInf, "id", empl.id.c_str());
+    MCR_ADD_CWV(emplInf, "stdWorkTime", empl.standardWorkTime);
+    MCR_ADD_CWV(emplInf, "maxWorkTime", empl.maxWorkTime);
+    MCR_ADD_CWV(emplInf, "hourlyWage", empl.hourlyWage);
+    MCR_ADD_CWV(emplInf, "cardId", empl.cardId.c_str());
 
     {
-      pugi::xml_node n = e.append_child();
+      pugi::xml_node n = emplInf.append_child();
       n.set_name("role");
       pugi::xml_attribute v = n.append_attribute("value");
       switch (empl.role) {
@@ -111,8 +117,8 @@ Result XMLWriter::writeData() const {
         }
       }
 
-      MCR_INS_ATT(p.begin);
-      MCR_INS_ATT(p.end);
+      MCR_INS_ATT("begin", p.begin);
+      MCR_INS_ATT("end", p.end);
     }
   }
 
