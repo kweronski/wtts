@@ -5,6 +5,7 @@
 #include <wtts/employeeSystemFactory.hpp>
 #include <wtts/interactiveCLI.hpp>
 #include <wtts/xmlParser.hpp>
+#include <wtts/xmlWriter.hpp>
 
 // For input handling
 #include <fcntl.h>
@@ -672,6 +673,80 @@ void appendGeneralAdminMenuEntries(Shell *s) {
 
         s->pushMenuState();
         buildEmployeeSelectionMenu(s, allEmployees);
+      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Read system from disk", .callback = [s]() {
+        s->setInputInstruction("Enter path to data storage: \n");
+        auto path = s->readLine();
+        s->setInputInstruction("");
+
+        try {
+          dp::XMLDataParser parser{path};
+          auto system = EmployeeSystemFactory::create(&parser);
+          s->setSystem(std::move(system));
+          buildAdminMenu(s, false);
+        } catch (std::exception const &e) {
+          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
+                      s);
+          return;
+        } catch (...) {
+          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
+          return;
+        }
+
+        MCR_CNF_LOG("Success: Loaded employee system from disk.\n", s);
+      }});
+
+  s->getInterface()->menu.push_back(ShellMenuEntry{
+      .description = "Save system to disk", .callback = [s]() {
+        s->setInputInstruction("Enter where to save the system to: \n");
+        auto path = s->readLine();
+        s->setInputInstruction("");
+
+        try {
+          dp::XMLWriter writer{path};
+          auto empl =
+              s->getSystem()->getEmployeeBy([](auto, auto, auto) { return 1; });
+          for (auto e : empl) {
+            auto id = writer.addEmployee();
+            writer.setEmployeeId(id, e->getEmployeeId());
+            writer.setEmployeeName(id, e->getEmployeeName());
+            writer.setEmployeeSurname(id, e->getEmployeeSurname());
+            writer.setEmployeeRole(id, e->getEmployeeRole());
+            writer.setEmployeeEmail(id, e->getEmployeeEmail());
+            writer.setEmployeeCardId(id, e->getEmployeeCardId());
+            writer.setEmployeeStatus(id, e->getEmployeeActive()
+                                             ? dp::EmployeeStatus::Active
+                                             : dp::EmployeeStatus::Inactive);
+            writer.setEmployeeTelephone(id, e->getEmployeeTelephone());
+            writer.setEmployeeHourlyWage(id, e->getEmployeeHourlyWage());
+            writer.setEmployeeMaxWorkTime(id, e->getEmployeeMaxWorkTime());
+            writer.setEmployeeStandardWorkTime(
+                id, e->getEmployeeStandardWorkTime());
+
+            auto at = s->getSystem()->getEmployeeAttendance(e);
+            for (const auto &a : at->getRecords())
+              writer.addEmployeeAttendance(id, a);
+          }
+
+          if (auto res = writer.writeData(); res != dp::Result::Success) {
+            MCR_CNF_LOG("Error: failed to write system to file: " +
+                            to_string(res) + "\n",
+                        s);
+          }
+
+          buildAdminMenu(s, false);
+        } catch (std::exception const &e) {
+          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
+                      s);
+          return;
+        } catch (...) {
+          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
+          return;
+        }
+
+        MCR_CNF_LOG("Success: Wrote employee system to disk.\n", s);
       }});
 }
 
@@ -1480,29 +1555,6 @@ void buildMainMenu(Shell *s) {
 
   appendGeneralAdminMenuEntries(s);
   appendAdminMenuEntries(s);
-
-  s->getInterface()->menu.push_back(ShellMenuEntry{
-      .description = "Initialize system from disk", .callback = [s]() {
-        s->setInputInstruction("Enter path to data storage: \n");
-        auto path = s->readLine();
-        s->setInputInstruction("");
-
-        try {
-          dp::XMLDataParser parser{path};
-          auto system = EmployeeSystemFactory::create(&parser);
-          s->setSystem(std::move(system));
-          buildAdminMenu(s, false);
-        } catch (std::exception const &e) {
-          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
-                      s);
-          return;
-        } catch (...) {
-          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
-          return;
-        }
-
-        MCR_CNF_LOG("Success: Loaded employee system from disk.\n", s);
-      }});
 
   s->getInterface()->menu.push_back(ShellMenuEntry{
       .description = "Exit", .callback = [s]() { s->requestExit(); }});
