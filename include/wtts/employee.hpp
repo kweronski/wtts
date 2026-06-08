@@ -131,6 +131,8 @@ public:
 
   Result editSettings(SystemSettings setting, unsigned value);
 
+  Result writeSystemToFile(std::string const &path) const;
+
   void removeEmployee(Employee *const);
 };
 } // namespace es

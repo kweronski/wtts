@@ -132,6 +132,10 @@ Result Admin::editSettings(SystemSettings setting, unsigned value) {
   return Result::Success;
 }
 
+Result Admin::writeSystemToFile(std::string const &path) const {
+  return system_->writeToFile(path);
+}
+
 void Admin::removeEmployee(Employee *const e) {
   if (!e)
     return;

@@ -102,6 +102,27 @@ static GeneralAdmin *resolveAdmin(Shell *s) {
   }
 }
 
+static Admin *resolveStrictAdmin(Shell *s) {
+  auto const &id = s->getCurrentEmployeeId();
+  if (id.empty())
+    return nullptr;
+
+  auto emp = s->getSystem()->getEmployeeById(id);
+  if (!emp) {
+    return nullptr;
+  }
+
+  switch (emp->getEmployeeRole()) {
+  case EmployeeRole::Admin:
+    return dynamic_cast<Admin *>(emp);
+  default:
+    MCR_CNF_LOG("Note: Active user does not have admin privileges; Using shell "
+                "root...\n",
+                s);
+    return nullptr;
+  }
+}
+
 std::string formatEmployeeRecord(Employee const *e) {
   return e->getEmployeeName() + " " + e->getEmployeeSurname() + " (" +
          e->getEmployeeId() + ") (" + to_string(e->getEmployeeRole()) + ")";
@@ -704,48 +725,57 @@ void appendGeneralAdminMenuEntries(Shell *s) {
         auto path = s->readLine();
         s->setInputInstruction("");
 
-        try {
-          dp::XMLWriter writer{path};
-          auto empl =
-              s->getSystem()->getEmployeeBy([](auto, auto, auto) { return 1; });
-          for (auto e : empl) {
-            auto id = writer.addEmployee();
-            writer.setEmployeeId(id, e->getEmployeeId());
-            writer.setEmployeeName(id, e->getEmployeeName());
-            writer.setEmployeeSurname(id, e->getEmployeeSurname());
-            writer.setEmployeeRole(id, e->getEmployeeRole());
-            writer.setEmployeeEmail(id, e->getEmployeeEmail());
-            writer.setEmployeeCardId(id, e->getEmployeeCardId());
-            writer.setEmployeeStatus(id, e->getEmployeeActive()
-                                             ? dp::EmployeeStatus::Active
-                                             : dp::EmployeeStatus::Inactive);
-            writer.setEmployeeTelephone(id, e->getEmployeeTelephone());
-            writer.setEmployeeHourlyWage(id, e->getEmployeeHourlyWage());
-            writer.setEmployeeMaxWorkTime(id, e->getEmployeeMaxWorkTime());
-            writer.setEmployeeStandardWorkTime(
-                id, e->getEmployeeStandardWorkTime());
-
-            auto at = s->getSystem()->getEmployeeAttendance(e);
-            for (const auto &a : at->getRecords())
-              writer.addEmployeeAttendance(id, a);
-          }
-
-          if (auto res = writer.writeData(); res != dp::Result::Success) {
-            MCR_CNF_LOG("Error: failed to write system to file: " +
-                            to_string(res) + "\n",
-                        s);
+        if (auto admin = resolveStrictAdmin(s); admin) {
+          if (auto res = admin->writeSystemToFile(path);
+              res != Result::Success) {
+            MCR_CNF_LOG("Error: Failed to write employee system: \n", s);
+            return;
           }
 
           buildAdminMenu(s, false);
-        } catch (std::exception const &e) {
-          MCR_CNF_LOG("Error: employee system: " + std::string{e.what()} + "\n",
-                      s);
-          return;
-        } catch (...) {
-          MCR_CNF_LOG("Error: Failed to create employee system: \n", s);
-          return;
-        }
+        } else {
+          try {
+            dp::XMLWriter writer{path};
+            auto empl = s->getSystem()->getEmployeeBy(
+                [](auto, auto, auto) { return 1; });
+            for (auto e : empl) {
+              auto id = writer.addEmployee();
+              writer.setEmployeeId(id, e->getEmployeeId());
+              writer.setEmployeeName(id, e->getEmployeeName());
+              writer.setEmployeeSurname(id, e->getEmployeeSurname());
+              writer.setEmployeeRole(id, e->getEmployeeRole());
+              writer.setEmployeeEmail(id, e->getEmployeeEmail());
+              writer.setEmployeeCardId(id, e->getEmployeeCardId());
+              writer.setEmployeeStatus(id, e->getEmployeeActive()
+                                               ? dp::EmployeeStatus::Active
+                                               : dp::EmployeeStatus::Inactive);
+              writer.setEmployeeTelephone(id, e->getEmployeeTelephone());
+              writer.setEmployeeHourlyWage(id, e->getEmployeeHourlyWage());
+              writer.setEmployeeMaxWorkTime(id, e->getEmployeeMaxWorkTime());
+              writer.setEmployeeStandardWorkTime(
+                  id, e->getEmployeeStandardWorkTime());
 
+              auto at = s->getSystem()->getEmployeeAttendance(e);
+              for (const auto &a : at->getRecords())
+                writer.addEmployeeAttendance(id, a);
+            }
+
+            if (auto res = writer.writeData(); res != dp::Result::Success) {
+              MCR_CNF_LOG("Error: failed to write system to file: " +
+                              to_string(res) + "\n",
+                          s);
+            }
+
+            buildAdminMenu(s, false);
+          } catch (std::exception const &e) {
+            MCR_CNF_LOG(
+                "Error: employee system: " + std::string{e.what()} + "\n", s);
+            return;
+          } catch (...) {
+            MCR_CNF_LOG("Error: Failed to write employee system: \n", s);
+            return;
+          }
+        }
         MCR_CNF_LOG("Success: Wrote employee system to disk.\n", s);
       }});
 }

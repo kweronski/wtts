@@ -7,6 +7,9 @@ std::string to_string(Result const r) {
   case Result::Success:
     out = "Success";
     break;
+  case Result::SystemWriteError:
+    out = "SystemWriteError";
+    break;
   case Result::EmployeeIdNotUniqueError:
     out = "EmployeeIdNotUniqueError";
     break;

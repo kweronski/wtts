@@ -69,6 +69,8 @@ public:
 
   Result removeEmployee(std::string const &id);
 
+  Result writeToFile(std::string const &path);
+
   bool tryRemoveEmployee(auto &container, std::string const &id) {
     // Search a container and remove if found; returns true on success
     for (auto it = container.begin(); it != container.end(); ++it) {

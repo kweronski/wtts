@@ -1,7 +1,37 @@
 #include <iostream>
 #include <wtts/employeeSystem.hpp>
+#include <wtts/xmlWriter.hpp>
 
 namespace es {
+Result EmployeeSystem::writeToFile(std::string const &path) {
+  dp::XMLWriter writer{path};
+  auto empl = this->getEmployeeBy([](auto, auto, auto) { return 1; });
+  for (auto e : empl) {
+    auto id = writer.addEmployee();
+    writer.setEmployeeId(id, e->getEmployeeId());
+    writer.setEmployeeName(id, e->getEmployeeName());
+    writer.setEmployeeSurname(id, e->getEmployeeSurname());
+    writer.setEmployeeRole(id, e->getEmployeeRole());
+    writer.setEmployeeEmail(id, e->getEmployeeEmail());
+    writer.setEmployeeCardId(id, e->getEmployeeCardId());
+    writer.setEmployeeStatus(id, e->getEmployeeActive()
+                                     ? dp::EmployeeStatus::Active
+                                     : dp::EmployeeStatus::Inactive);
+    writer.setEmployeeTelephone(id, e->getEmployeeTelephone());
+    writer.setEmployeeHourlyWage(id, e->getEmployeeHourlyWage());
+    writer.setEmployeeMaxWorkTime(id, e->getEmployeeMaxWorkTime());
+    writer.setEmployeeStandardWorkTime(id, e->getEmployeeStandardWorkTime());
+
+    auto at = this->getEmployeeAttendance(e);
+    for (const auto &a : at->getRecords())
+      writer.addEmployeeAttendance(id, a);
+  }
+
+  auto res = writer.writeData();
+  return res == dp::Result::Success ? es::Result::Success
+                                    : es::Result::SystemWriteError;
+}
+
 Result EmployeeSystem::removeEmployee(std::string const &id) {
   // First, find the employee and check they are not checked in
   Employee *found = getEmployeeById(id);
