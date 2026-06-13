@@ -1,0 +1,3 @@
+add_executable(testIntegrationE2E testIntegrationE2E.cpp)
+target_link_libraries(testIntegrationE2E PRIVATE employeeSystem)
+add_test(NAME integrationE2ETest COMMAND testIntegrationE2E)
