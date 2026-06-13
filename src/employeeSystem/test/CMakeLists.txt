@@ -1,0 +1,3 @@
+add_executable(testCalendarValidity testCalendarValidity.cpp)
+target_link_libraries(testCalendarValidity PRIVATE employeeSystem)
+add_test(NAME calendarValidityTest COMMAND testCalendarValidity)

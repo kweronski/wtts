@@ -40,6 +40,9 @@ std::string to_string(Result const r) {
   case Result::UnknownEmployeeRoleError:
     out = "UnknownEmployeeRoleError";
     break;
+  case Result::InvalidDate:
+    out = "InvalidDate";
+    break;
   }
   return out;
 }
