@@ -27,3 +27,4 @@ add_executable(wttsapp main.cpp)
 target_link_libraries(wttsapp PRIVATE employeeSystem -lpthread)
 
 add_subdirectory(dataParser/test)
+add_subdirectory(employeeSystem/test)
