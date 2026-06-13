@@ -1,0 +1,3 @@
+add_executable(testOverlappingRecords testOverlappingRecords.cpp)
+target_link_libraries(testOverlappingRecords PRIVATE employeeSystem)
+add_test(NAME overlappingRecordsTest COMMAND testOverlappingRecords)
