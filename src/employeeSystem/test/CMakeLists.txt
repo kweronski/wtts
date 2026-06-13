@@ -1,0 +1,3 @@
+add_executable(testTimeMath testTimeMath.cpp)
+target_link_libraries(testTimeMath PRIVATE employeeSystem)
+add_test(NAME timeMathTest COMMAND testTimeMath)
