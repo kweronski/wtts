@@ -1,0 +1,3 @@
+add_executable(testAttendanceTransitions testAttendanceTransitions.cpp)
+target_link_libraries(testAttendanceTransitions PRIVATE employeeSystem)
+add_test(NAME attendanceTransitionsTest COMMAND testAttendanceTransitions)
