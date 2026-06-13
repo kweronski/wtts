@@ -1,0 +1,3 @@
+add_executable(testPayCalculator testPayCalculator.cpp)
+target_link_libraries(testPayCalculator PRIVATE employeeSystem)
+add_test(NAME payCalculatorTest COMMAND testPayCalculator)
