@@ -1,0 +1,3 @@
+add_executable(testEmptyReport testEmptyReport.cpp)
+target_link_libraries(testEmptyReport PRIVATE employeeSystem)
+add_test(NAME emptyReportTest COMMAND testEmptyReport)
