@@ -1,0 +1,3 @@
+add_executable(testDriverDeliveries testDriverDeliveries.cpp)
+target_link_libraries(testDriverDeliveries PRIVATE employeeSystem)
+add_test(NAME driverDeliveriesTest COMMAND testDriverDeliveries)
