@@ -1,3 +1,6 @@
 add_executable(testTimeMath testTimeMath.cpp)
 target_link_libraries(testTimeMath PRIVATE employeeSystem)
 add_test(NAME timeMathTest COMMAND testTimeMath)
+add_executable(testPayCalculator testPayCalculator.cpp)
+target_link_libraries(testPayCalculator PRIVATE employeeSystem)
+add_test(NAME payCalculatorTest COMMAND testPayCalculator)
