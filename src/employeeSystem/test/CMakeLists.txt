@@ -1,3 +1,6 @@
 add_executable(testEmptyReport testEmptyReport.cpp)
 target_link_libraries(testEmptyReport PRIVATE employeeSystem)
 add_test(NAME emptyReportTest COMMAND testEmptyReport)
+add_executable(testPayCalculator testPayCalculator.cpp)
+target_link_libraries(testPayCalculator PRIVATE employeeSystem)
+add_test(NAME payCalculatorTest COMMAND testPayCalculator)
