@@ -1,0 +1,3 @@
+add_executable(testWageLimits testWageLimits.cpp)
+target_link_libraries(testWageLimits PRIVATE employeeSystem)
+add_test(NAME wageLimitsTest COMMAND testWageLimits)
