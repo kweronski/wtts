@@ -15,7 +15,8 @@ enum class Result {
   AttendanceExtractionError,
   EmployeeIsCheckedInError,
   UnknownEmployeeRoleError,
-  SystemWriteError
+  SystemWriteError,
+  InvalidDate
 };
 
 std::string to_string(Result const);
