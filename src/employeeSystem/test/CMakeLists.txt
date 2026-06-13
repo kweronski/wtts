@@ -1,0 +1,3 @@
+add_executable(testMonthLengths testMonthLengths.cpp)
+target_link_libraries(testMonthLengths PRIVATE employeeSystem)
+add_test(NAME monthLengthsTest COMMAND testMonthLengths)
