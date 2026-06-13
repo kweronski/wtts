@@ -1,3 +1,6 @@
+add_executable(testAttendanceTransitions testAttendanceTransitions.cpp)
+target_link_libraries(testAttendanceTransitions PRIVATE employeeSystem)
+add_test(NAME attendanceTransitionsTest COMMAND testAttendanceTransitions)
 add_executable(testEmptyReport testEmptyReport.cpp)
 target_link_libraries(testEmptyReport PRIVATE employeeSystem)
 add_test(NAME emptyReportTest COMMAND testEmptyReport)
